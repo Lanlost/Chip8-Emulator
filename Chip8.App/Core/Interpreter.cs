@@ -19,9 +19,9 @@ namespace LandoWorks.Emulation.Chip8.Core
         private byte _delayRegister;
         private byte _soundRegister;
 
-        private readonly Stack<ushort> stack = new(); 
+        private readonly Stack<ushort> _stack = new(); 
 
-        private readonly Dictionary<byte, byte> registers = new()
+        private readonly Dictionary<byte, byte> _registers = new()
         {
             { 0x0, 0x00 }, { 0x1, 0x00 }, { 0x2, 0x00 }, { 0x3, 0x00 }, 
             { 0x4, 0x00 }, { 0x5, 0x00 }, { 0x6, 0x00 }, { 0x7, 0x00 }, 
@@ -29,7 +29,7 @@ namespace LandoWorks.Emulation.Chip8.Core
             { 0xC, 0x00 }, { 0xD, 0x00 }, { 0xE, 0x00 }, { 0xF, 0x00 },
         };
 
-        private readonly static byte[][] font =
+        private readonly static byte[][] _font =
         [
             [ 0xF0, 0x90, 0x90, 0x90, 0xF0 ], // 0
             [ 0x20, 0x60, 0x20, 0x20, 0x70 ], // 1
@@ -88,7 +88,7 @@ namespace LandoWorks.Emulation.Chip8.Core
             // Copy font into ram at FONT_ADDRESS. (0x50)
             ushort currentAddress = FONT_ADDRESS;
 
-            foreach(var character in font)
+            foreach(var character in _font)
             {
                 Debug.WriteLine($"Copying font chr, length: { character.Length } to address 0x{currentAddress:X4}...");
                 character.CopyTo(_ram, currentAddress);
@@ -107,11 +107,11 @@ namespace LandoWorks.Emulation.Chip8.Core
         private static long TICK_TIMER_FREQUENCY = Stopwatch.Frequency / 60;
         private long nextTick = TICK_TIMER_FREQUENCY;
             
-        public void Step()
+        public void Step3()
         {
             //var y = Display.Height / 2;
 
-            var firstChar = font[1];
+            var firstChar = _font[1];
             var y = 0;
 
             // for(var rowIndex = 0; rowIndex < firstChar.Length; rowIndex++)
@@ -134,7 +134,7 @@ namespace LandoWorks.Emulation.Chip8.Core
 
                 for(int x = 0; x < 8; x++)
                 {   
-                    _display.Plot(x, y, GetSpriteBit(row, x));
+                    _display.PlotPixel(x, y, GetSpritePixel(row, x));
                 }
 
                 y+=2;
@@ -146,7 +146,7 @@ namespace LandoWorks.Emulation.Chip8.Core
             // }
         }
 
-        public void Step2()
+        public void Step()
         {
             var haveTicked = _timer.HasTicked();
 
@@ -190,9 +190,8 @@ namespace LandoWorks.Emulation.Chip8.Core
                 case 0x0:
                     // 00E0 (clear screen)
                     if (X == 0x0 && Y == 0xE && N == 0x0)
-                    {
-                        // Clear screen
-                    }
+                        Display.Clear();
+
                     break;
 
                 // 1NNN (jump)
@@ -202,12 +201,12 @@ namespace LandoWorks.Emulation.Chip8.Core
 
                 // 6XNN (set register VX)
                 case 0x6:
-                    registers[X] = NN;
+                    _registers[X] = NN;
                     break;
 
                 // 7XNN (add value to register VX)
                 case 0x7:
-                    registers[X] += NN;
+                    _registers[X] += NN;
                     break;
 
                 //ANNN (set index register I)
@@ -217,19 +216,34 @@ namespace LandoWorks.Emulation.Chip8.Core
 
                 case 0xD:
                     /* DXYN: Display
-                    This is the most involved instruction. It will draw an N pixels tall sprite 
-                    from the memory location that the I index register is holding to the screen, 
-                    at the horizontal X coordinate in VX and the Y coordinate in VY. All the pixels 
-                    that are “on” in the sprite will flip the pixels on the screen that it is drawn 
-                    to (from left to right, from most to least significant bit). If any pixels on the
-                    screen were turned “off” by this, the VF flag register is set to 1. 
-                    Otherwise, it’s set to 0.
+                        This is the most involved instruction. It will draw an N pixels tall sprite 
+                        from the memory location that the I index register is holding to the screen, 
+                        at the horizontal X coordinate in VX and the Y coordinate in VY. All the pixels 
+                        that are “on” in the sprite will flip the pixels on the screen that it is drawn 
+                        to (from left to right, from most to least significant bit). If any pixels on the
+                        screen were turned “off” by this, the VF flag register is set to 1. 
+                        Otherwise, it’s set to 0.
                     */
                     
+                    var cx = _registers[X];
+                    var cy = _registers[Y];
                     
-                    var cx = registers[X];
-                    var cy = registers[Y];
+                    var address = _indexRegister;
+                    var spriteHeight = N;
+                    
+                    for(var row = 0; row < spriteHeight; row++) 
+                    {
+                        for(var column = 0; column < 8; column++)
+                        {   
+                            var pixelOn = GetSpritePixel(_ram[address], column);
+                            var wasUnset = Display.PlotPixel(cx + column, cy + row, pixelOn);
 
+                            if (wasUnset)
+                                _registers[0xF] = 0x1;
+                        }
+
+                        address += 0x1;
+                    }
                     break;
 
                 default:
@@ -237,6 +251,11 @@ namespace LandoWorks.Emulation.Chip8.Core
             }
         }
 
+        /// <summary>
+        /// Gets an entire row of pixels from a byte.
+        /// </summary>
+        /// <param name="spriteByte"></param>
+        /// <returns></returns>
         private bool[] GetSpritePixels(byte spriteByte)
         {
             // 0xF0 = 1111 0000 → "████    "
@@ -257,7 +276,13 @@ namespace LandoWorks.Emulation.Chip8.Core
             return pixels;
         }
 
-        private bool GetSpriteBit(byte spriteByte, int xIndex)
+        /// <summary>
+        /// Gets an individual pixel from a sprite byte.
+        /// </summary>
+        /// <param name="spriteByte"></param>
+        /// <param name="xIndex"></param>
+        /// <returns></returns>
+        private bool GetSpritePixel(byte spriteByte, int xIndex)
         {
             // 0xF0 = 1111 0000 → "████    "
             return (spriteByte << xIndex & 0x80) == 0x80;
