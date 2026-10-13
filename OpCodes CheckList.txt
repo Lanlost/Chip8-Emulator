@@ -1,0 +1,59 @@
+https://tobiasvl.github.io/blog/write-a-chip-8-emulator/
+
+00E0 - Clear Screen                     ☑ 
+1nnn - Jump                             ☑ 
+
+Subroutines
+00ee                                    ☑ 
+2nnn                                    ☑ 
+
+Skip Conditionally			
+3xnn                                    ☑
+4xnn                                    ☑
+5xy0                                    ☑
+9xy0                                    ☑
+
+6xnn - Set                              ☑
+7xnn - Add                              ☑
+
+Logic and Arithmetic Instructions
+8xy0 - Set                              ☑
+8xy1 - Binary OR                        ☑
+8xy2 - Binary AND                       ☑
+8xy3 - Logical XOR                      ☑
+8xy4 - Add                              ☑
+
+Subtract
+8xy5                                    ☑
+8xy7                                    ☑
+
+Shift
+8xy6                                    ☐ 
+8xye                                    ☐ 
+
+Annn - Set Index                        ☑
+Bnnn - Jump w/ offset                   ☐ 
+Cxnn - Random                           ☐ 
+Dxyn - Display                          ☑
+
+Skip If Key
+Ex9e                                    ☑*
+Exa1                                    ☑*
+
+Timers
+Fx07                                    ☐ 
+Fx15                                    ☐ 
+Fx18                                    ☐ 
+
+Fx1e - Add to index                     ☑
+Fx0a - Get key                          ☐ 
+Fx29 - Font Character                   ☐ 
+Fx33 - Binary-coded decimal conversion  ☐ 
+
+Store and Load Memory
+Fx55                                    ☐ 
+Fx65                                    ☐ 
+
+				   22 / 34
+
+

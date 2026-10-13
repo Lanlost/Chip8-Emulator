@@ -1,12 +1,14 @@
 ﻿using System;
 using System.Diagnostics;
+using Raylib_cs;
 
 namespace LandoWorks.Emulation.Chip8.Core
 {
     public class Interpreter
     {
         #region Support Config
-        const bool FX1E_OVERFLOW_VF = true;
+        const bool FX1E_OVERFLOW_VF = true; // False for COSMAC VIP, but some games require it and it shouldn't be harmful.
+        const bool BNNN_OFFSET_BUG = false; // False for COSMAC VIP. CHIP-48 and SUPER-CHIP introduced this bug. Recommended false.
         #endregion
 
         #region Private Variables
@@ -33,25 +35,25 @@ namespace LandoWorks.Emulation.Chip8.Core
             { 0xC, 0x00 }, { 0xD, 0x00 }, { 0xE, 0x00 }, { 0xF, 0x00 },
         };
 
-        private readonly static byte[][] _font =
-        [
-            [ 0xF0, 0x90, 0x90, 0x90, 0xF0 ], // 0
-            [ 0x20, 0x60, 0x20, 0x20, 0x70 ], // 1
-            [ 0xF0, 0x10, 0xF0, 0x80, 0xF0 ], // 2
-            [ 0xF0, 0x10, 0xF0, 0x10, 0xF0 ], // 3
-            [ 0x90, 0x90, 0xF0, 0x10, 0x10 ], // 4
-            [ 0xF0, 0x80, 0xF0, 0x10, 0xF0 ], // 5
-            [ 0xF0, 0x80, 0xF0, 0x90, 0xF0 ], // 6
-            [ 0xF0, 0x10, 0x20, 0x40, 0x40 ], // 7
-            [ 0xF0, 0x90, 0xF0, 0x90, 0xF0 ], // 8
-            [ 0xF0, 0x90, 0xF0, 0x10, 0xF0 ], // 9
-            [ 0xF0, 0x90, 0xF0, 0x90, 0x90 ], // A
-            [ 0xE0, 0x90, 0xE0, 0x90, 0xE0 ], // B
-            [ 0xF0, 0x80, 0x80, 0x80, 0xF0 ], // C
-            [ 0xE0, 0x90, 0x90, 0x90, 0xE0 ], // D
-            [ 0xF0, 0x80, 0xF0, 0x80, 0xF0 ], // E
-            [ 0xF0, 0x80, 0xF0, 0x80, 0x80 ]  // F
-        ];
+        private readonly static byte[,] _font =
+        {
+            { 0xF0, 0x90, 0x90, 0x90, 0xF0 }, // 0
+            { 0x20, 0x60, 0x20, 0x20, 0x70 }, // 1
+            { 0xF0, 0x10, 0xF0, 0x80, 0xF0 }, // 2
+            { 0xF0, 0x10, 0xF0, 0x10, 0xF0 }, // 3
+            { 0x90, 0x90, 0xF0, 0x10, 0x10 }, // 4
+            { 0xF0, 0x80, 0xF0, 0x10, 0xF0 }, // 5
+            { 0xF0, 0x80, 0xF0, 0x90, 0xF0 }, // 6
+            { 0xF0, 0x10, 0x20, 0x40, 0x40 }, // 7
+            { 0xF0, 0x90, 0xF0, 0x90, 0xF0 }, // 8
+            { 0xF0, 0x90, 0xF0, 0x10, 0xF0 }, // 9
+            { 0xF0, 0x90, 0xF0, 0x90, 0x90 }, // A
+            { 0xE0, 0x90, 0xE0, 0x90, 0xE0 }, // B
+            { 0xF0, 0x80, 0x80, 0x80, 0xF0 }, // C
+            { 0xE0, 0x90, 0x90, 0x90, 0xE0 }, // D
+            { 0xF0, 0x80, 0xF0, 0x80, 0xF0 }, // E
+            { 0xF0, 0x80, 0xF0, 0x80, 0x80 }  // F
+        };
 
         private Timer _timer;
         #endregion
@@ -90,13 +92,14 @@ namespace LandoWorks.Emulation.Chip8.Core
             rom.CopyTo(_ram, ENTRY_POINT);
 
             // Copy font into ram at FONT_ADDRESS. (0x50)
-            ushort currentAddress = FONT_ADDRESS;
-
-            foreach(var character in _font)
+            for(var row = 0; row < _font.GetLength(0); row++)
             {
-                Debug.WriteLine($"Copying font chr, length: { character.Length } to address 0x{currentAddress:X4}...");
-                character.CopyTo(_ram, currentAddress);
-                currentAddress += (ushort)character.Length;
+                var rowStartIndex = FONT_ADDRESS + row * _font.GetLength(1);
+                Debug.WriteLine($"Copying font chr to address 0x{rowStartIndex:X4}...");
+
+                for(var column = 0; column < _font.GetLength(1); column++) {
+                    _ram[rowStartIndex + column] = _font[row, column];
+                }
             }
         }
 
@@ -110,45 +113,6 @@ namespace LandoWorks.Emulation.Chip8.Core
 
         private static long TICK_TIMER_FREQUENCY = Stopwatch.Frequency / 60;
         private long nextTick = TICK_TIMER_FREQUENCY;
-            
-        public void Step3()
-        {
-            //var y = Display.Height / 2;
-
-            var firstChar = _font[1];
-            var y = 0;
-
-            // for(var rowIndex = 0; rowIndex < firstChar.Length; rowIndex++)
-            // {   
-            //     var row = firstChar[rowIndex];
-
-            //     var pixels = GetSpritePixels(row);
-
-            //     for(int x = 0; x < pixels.Length; x++)
-            //     {   
-            //         _display.Plot(x, y, pixels[x]);
-            //     }
-
-            //     y+=2;
-            // }
-            
-            foreach(var row in firstChar)
-            {
-                //var pixels = GetSpritePixels2(row);
-
-                for(int x = 0; x < 8; x++)
-                {   
-                    _display.PlotPixel(x, y, GetSpritePixel(row, x));
-                }
-
-                y+=2;
-            }
-            
-            // for(int x = 0; x < Display.Width; x++)
-            // {
-            //     _display.Plot(x, y, true);
-            // }
-        }
 
         public void Step()
         {
@@ -161,7 +125,7 @@ namespace LandoWorks.Emulation.Chip8.Core
 
             // Fetch
             byte b1 = _ram[_programCounter];
-            byte b2 = _ram[_programCounter+1];
+            byte b2 = _ram[_programCounter + 1];
 
             IncrementOneInstruction();
 
@@ -182,21 +146,24 @@ namespace LandoWorks.Emulation.Chip8.Core
             byte NN    = (byte)(bits & 0x00FF);
             ushort NNN = (ushort)(bits & 0x0FFF);
 
+            var handled = false;
+
             switch(O)
             {
                 case 0x0:
                     // 00E0 (clear screen)
-                    if (X == 0x0 && Y == 0xE && N == 0x0)
+                    if (NNN == 0x0e0)
                     {
                         Display.Clear();
+                        handled = true;
                     }
                     
                     // 00EE: [SUBROUTINE] Pops a value from the stack and jumps to it.
-                    else if (X == 0x0 && Y == 0xE && N == 0xE)
+                    else if (NNN == 0x0ee)
                     {
-                        // ToDo: TryPop?? --|
                         var returnAddress = _stack.Pop();
                         _programCounter = returnAddress;
+                        handled = true;
                     }
 
                     break;
@@ -204,47 +171,59 @@ namespace LandoWorks.Emulation.Chip8.Core
                 // 1NNN (jump)
                 case 0x1:
                     _programCounter = NNN;
+                    handled = true;
                     break;
 
                 // [SUBROUTINE] Calls a subroutine (with current address added to stack)
                 case 0x2: 
                     _stack.Push(_programCounter);
                     _programCounter = NNN;
+                    handled = true;
                     break;
 
                 // [SKIP CONDITIONALLY] 3XNN skips one instruction if the value in VX is equal to NN.
                 case 0x3: 
                     if (_registers[X] == NN)
                         IncrementOneInstruction();
+
+                    handled = true;
                     break;
 
                 // [SKIP CONDITIONALLY] 4XNN skips one instruction if the value in VX is NOT equal to NN.
                 case 0x4: 
                     if (_registers[X] != NN)
                         IncrementOneInstruction();
+
+                    handled = true;
                     break;
 
                 // [SKIP CONDITIONALLY] 5XY0 skips one instruction if the values in VX and VY are equal.
                 case 0x5: 
                     if (_registers[X] == _registers[Y])
                         IncrementOneInstruction();
+
+                    handled = true;
                     break;
 
                 // [SKIP CONDITIONALLY] 5XY0 skips one instruction if the values in VX and VY are NOT equal.
                 case 0x9: 
                     if (_registers[X] != _registers[Y])
                         IncrementOneInstruction();
+
+                    handled = true;
                     break;
 
                 // 6XNN (set register VX)
                 case 0x6:
                     _registers[X] = NN;
+                    handled = true;
                     break;
 
                 // 7XNN (add value to register VX)
                 // Does not flip VF register if it overflows.
                 case 0x7:
                     _registers[X] += NN;
+                    handled = true;
                     break;
 
                 case 0x8: 
@@ -259,6 +238,7 @@ namespace LandoWorks.Emulation.Chip8.Core
                     if (N == 0)
                     {
                         _registers[X] = _registers[Y];
+                        handled = true;
                     }
 
                     // 8XY1: Binary OR - VF Undefined
@@ -266,18 +246,21 @@ namespace LandoWorks.Emulation.Chip8.Core
                     else if(N == 1)
                     {
                         _registers[X] = (byte)(_registers[X] | _registers[Y]);
+                        handled = true;
                     }
 
                     // 8XY2: Binary AND - VF Undefined
                     else if(N == 2)
                     {
                         _registers[X] = (byte)(_registers[X] & _registers[Y]);
+                        handled = true;
                     }
 
                     // 8XY3: Logical XOR - VF Undefined
                     else if(N == 3)
                     {
                         _registers[X] = (byte)(_registers[X] ^ _registers[Y]);
+                        handled = true;
                     }
 
                     // 8XY4: Add - VX is set to the value of VX plus the value of VY. VY is not affected.
@@ -308,25 +291,55 @@ namespace LandoWorks.Emulation.Chip8.Core
                             _registers[X] += _registers[Y];
                             _registers[0xF] = 0x0;
                         }
+
+                        handled = true;
                     }
 
                     // 8XY5: Sets VX to the result of VX - VY. VY is unaffected. VF is also set, see "SubtractToVX".
                     else if (N == 5)
                     {
                         SubtractToVX(VX: X, minuend:_registers[X], subtrahend: _registers[Y]);
+                        handled = true;
                     }
 
                     // 8XY7: Sets VX to the result of VY - VX. VY is unaffected. VF is also set, see "SubtractToVX".
                     else if (N == 7)
                     {
                         SubtractToVX(VX: X, minuend: _registers[Y], subtrahend:_registers[X]);
+                        handled = true;
                     }
 
                     break;
 
-                //ANNN (set index register I)
+                // ANNN: (set index register I)
                 case 0xA:
                     _indexRegister = NNN;
+                    handled = true;
+                    break;
+
+                // BNNN: Jump with offset
+                case 0xB:
+                    // [!] Ambiguous instruction - 
+                    //     In the original COSMAC VIP interpreter, this instruction jumped to the address NNN plus the value in the register V0. 
+                    //     This was mainly used for “jump tables”, to quickly be able to jump to different subroutines based on some input.
+                    //     
+                    //     Starting with CHIP-48 and SUPER-CHIP, it was (probably unintentionally) changed to work as BXNN: It will jump to the
+                    //     address XNN, plus the value in the register VX. So the instruction B220 will jump to address 220 plus the value in the 
+                    //     register V2.
+                    //
+                    //     The BNNN instruction was not widely used, so you might be able to just implement the first behavior (if you pick one, 
+                    //     that’s definitely the one to go with). If you want to support a wide range of CHIP-8 programs, make this “quirk” 
+                    //     configurable.
+                    var offset = BNNN_OFFSET_BUG ? _registers[X] : _registers[0x0];
+                    _programCounter = (ushort)(NNN + offset);
+                    handled = true;
+                    break;
+
+                // CXNN: Random
+                case 0xC:
+                    // Upper bounds here is exclusive, so it's 256 not 255.
+                    _registers[X] = (byte)(Random.Shared.Next(256) & NN);
+                    handled = true;
                     break;
 
                 case 0xD:
@@ -359,6 +372,8 @@ namespace LandoWorks.Emulation.Chip8.Core
 
                         address += 0x1;
                     }
+
+                    handled = true;
                     break;
 
                 // [SKIP IF KEY]: These instructions (unlike the later FX0A) don’t wait for input.
@@ -372,9 +387,50 @@ namespace LandoWorks.Emulation.Chip8.Core
                     if (NN == 0x9E && keyIsPressed || NN == 0xA1 && !keyIsPressed)
                         IncrementOneInstruction();
                             
+                    handled = true;
                     break;
 
                 case 0xF:
+                    // FX07: [TIMER] sets VX to the current value of the delay timer
+                    if (NN == 0x07)
+                    {
+                        _registers[X] = _delayRegister;
+                        handled = true;
+                    }
+
+                    // FX15: [TIMER] sets the delay timer to the value in VX
+                    else if(NN == 0x15)
+                    {
+                        _delayRegister = _registers[X];
+                        handled = true;
+                    }
+
+                    // FX18: [TIMER] sets the sound timer to the value in VX 
+                    else if(NN == 0x18)
+                    {
+                        _soundRegister = _registers[X];
+                        handled = true;
+                    }
+
+                    // FX0A: Get Key
+                    else if (NN == 0x0A)
+                    {
+                        // ToDO:
+                    }
+
+                    // FX29: Font Character
+                    //       The index register I is set to the address of the hexadecimal character in VX.
+                    //       An 8-bit register can hold two hexadecimal numbers, but this would only point to one character.
+                    //       original COSMAC VIP interpreter just took the last nibble of VX and used that as the character.
+                    else if (NN == 0x29)
+                    {
+                        // NOTE: It kind of baffles me that when the font only consists of 0-F that they don't
+                        // just use X directly. e.g. F029 would be character 0, FF29 would be character F...
+                        var chrIndex = (byte)(_registers[X] & 0x0F);
+                        _indexRegister = (ushort)(FONT_ADDRESS + (chrIndex * _font.GetLength(1))); 
+                        handled = true;
+                    }
+
                     // FX1E: Add to index
                     //  The index register I will get the value in VX added to it.
                     //
@@ -384,20 +440,47 @@ namespace LandoWorks.Emulation.Chip8.Core
                     //  the CHIP-8 interpreter for Amiga behaved this way. At least one known game, Spacefight 2091!, relies on
                     //  this behavior. I don’t know of any games that rely on this not happening, so perhaps it’s safe to do it
                     //  like the Amiga interpreter did.
-                    if (NN == 0x1E)
+                    else if (NN == 0x1E)
                     {
-                        var newValue = _indexRegister + _registers[X];
+                        var newValue = (ushort)(_indexRegister + _registers[X]);
 
                         if (FX1E_OVERFLOW_VF && newValue >= RAM_SIZE)
                             _registers[0xF] = 1;
                         
-                        _indexRegister = (ushort)newValue;
+                        _indexRegister = newValue;
+
+                        handled = true;
                     }
+
+                    //FX33: Binary-coded decimal conversion
+                    //      This instruction is a little involved. It takes the number in VX (which is one byte, 
+                    //      so it can be any number from 0 to 255) and converts it to three decimal digits, storing
+                    //      these digits in memory at the address in the index register I. For example, if VX contains
+                    //      156 (or 9C in hexadecimal), it would put the number 1 at the address in I, 5 in address 
+                    //      I + 1, and 6 in address I + 2.
+                    else if (NN == 0x33)
+                    {
+                        var number = _registers[X];
+                        byte divisor = 100;
+                        var curAddress = _indexRegister;
+
+                        while (divisor >= 1)
+                        {
+                            _ram[curAddress++] = (byte)(number / divisor);
+                            number = (byte)(number % divisor);
+                            divisor = (byte)(divisor / 10);
+                        }
+                    }
+                    
                     break;
 
-                default:
-                    Debug.WriteLine($"Unhandled Opcode: {bits:X4}");
+                default: 
                     break;
+            }
+
+            if (!handled)
+            {
+                Debug.WriteLine($"Unhandled Opcode: {bits:X4}");
             }
         }
 
@@ -514,32 +597,3 @@ namespace LandoWorks.Emulation.Chip8.Core
         }
     }
 }
-
-/*
-public void Start()
-        {
-            var stopwatch = new Stopwatch();
-            stopwatch.Start();
-            
-            var seconds = 0;
-            long last = 0;
-
-            var remainingTicks = 60;
-
-            while(++seconds < 5) 
-            {
-                while(remainingTicks >= 0) 
-                {
-                    var cur = stopwatch.ElapsedTicks % (Stopwatch.Frequency / 60); 
-
-                    // If cur < last then we had to have looped around.
-                    if (cur < last)
-                        remainingTicks--;
-
-                    last = cur;
-                }
-
-                Console.WriteLine("One second...");
-                remainingTicks = 60;
-            }
-        }*/
