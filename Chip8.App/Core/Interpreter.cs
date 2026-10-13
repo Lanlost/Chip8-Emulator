@@ -5,6 +5,10 @@ namespace LandoWorks.Emulation.Chip8.Core
 {
     public class Interpreter
     {
+        #region Support Config
+        const bool FX1E_OVERFLOW_VF = true;
+        #endregion
+
         #region Private Variables
         private const ushort RAM_SIZE = 0x1000; // 4096
         private const ushort ENTRY_POINT = 0x200;
@@ -158,9 +162,11 @@ namespace LandoWorks.Emulation.Chip8.Core
             // Fetch
             byte b1 = _ram[_programCounter];
             byte b2 = _ram[_programCounter+1];
-            ushort bits = (ushort)(b1 << 8 | b2);
-            _programCounter += 0x2;
 
+            IncrementOneInstruction();
+
+            ushort bits = (ushort)(b1 << 8 | b2);
+            
             // Decode
             // O: The first nibble. Used for opcode categories.
             // X: The second nibble. Used to look up one of the 16 registers (VX) from V0 through VF.
@@ -178,19 +184,20 @@ namespace LandoWorks.Emulation.Chip8.Core
 
             switch(O)
             {
-                /*
-                00E0 (clear screen)
-                1NNN (jump)
-                6XNN (set register VX)
-                7XNN (add value to register VX)
-                ANNN (set index register I)
-                DXYN (display/draw)
-                */
-
                 case 0x0:
                     // 00E0 (clear screen)
                     if (X == 0x0 && Y == 0xE && N == 0x0)
+                    {
                         Display.Clear();
+                    }
+                    
+                    // 00EE: [SUBROUTINE] Pops a value from the stack and jumps to it.
+                    else if (X == 0x0 && Y == 0xE && N == 0xE)
+                    {
+                        // ToDo: TryPop?? --|
+                        var returnAddress = _stack.Pop();
+                        _programCounter = returnAddress;
+                    }
 
                     break;
 
@@ -199,14 +206,122 @@ namespace LandoWorks.Emulation.Chip8.Core
                     _programCounter = NNN;
                     break;
 
+                // [SUBROUTINE] Calls a subroutine (with current address added to stack)
+                case 0x2: 
+                    _stack.Push(_programCounter);
+                    _programCounter = NNN;
+                    break;
+
+                // [SKIP CONDITIONALLY] 3XNN skips one instruction if the value in VX is equal to NN.
+                case 0x3: 
+                    if (_registers[X] == NN)
+                        IncrementOneInstruction();
+                    break;
+
+                // [SKIP CONDITIONALLY] 4XNN skips one instruction if the value in VX is NOT equal to NN.
+                case 0x4: 
+                    if (_registers[X] != NN)
+                        IncrementOneInstruction();
+                    break;
+
+                // [SKIP CONDITIONALLY] 5XY0 skips one instruction if the values in VX and VY are equal.
+                case 0x5: 
+                    if (_registers[X] == _registers[Y])
+                        IncrementOneInstruction();
+                    break;
+
+                // [SKIP CONDITIONALLY] 5XY0 skips one instruction if the values in VX and VY are NOT equal.
+                case 0x9: 
+                    if (_registers[X] != _registers[Y])
+                        IncrementOneInstruction();
+                    break;
+
                 // 6XNN (set register VX)
                 case 0x6:
                     _registers[X] = NN;
                     break;
 
                 // 7XNN (add value to register VX)
+                // Does not flip VF register if it overflows.
                 case 0x7:
                     _registers[X] += NN;
+                    break;
+
+                case 0x8: 
+                    // [LOGIC AND ARITHMETIC OPERATIONS]
+                    // On the COSMAC VIP, all of these instructions changed the value of VF. 
+                    // Some of them are mentioned below. For the ones that don’t mention affecting VF, 
+                    // the resulting value in VF is undefined. This is because the CHIP-8 interpreter 
+                    // dispatched these instructions to the 1802 CPU’s ALU circuit, and while doing
+                    // so it would change the CPU’s flag register, which always gets copied to VF.
+
+                    // 8XY0: Set - VF Undefined.
+                    if (N == 0)
+                    {
+                        _registers[X] = _registers[Y];
+                    }
+
+                    // 8XY1: Binary OR - VF Undefined
+                    // VX is set to the bitwise/binary logical disjunction (OR) of VX and VY. VY is not affected.
+                    else if(N == 1)
+                    {
+                        _registers[X] = (byte)(_registers[X] | _registers[Y]);
+                    }
+
+                    // 8XY2: Binary AND - VF Undefined
+                    else if(N == 2)
+                    {
+                        _registers[X] = (byte)(_registers[X] & _registers[Y]);
+                    }
+
+                    // 8XY3: Logical XOR - VF Undefined
+                    else if(N == 3)
+                    {
+                        _registers[X] = (byte)(_registers[X] ^ _registers[Y]);
+                    }
+
+                    // 8XY4: Add - VX is set to the value of VX plus the value of VY. VY is not affected.
+                    //
+                    //       Unlike 7XNN, this addition will affect the carry flag. If the result is larger
+                    //       than 255 (and thus overflows the 8-bit register VX), the flag register VF is 
+                    //       set to 1. If it doesn’t overflow, VF is set to 0.
+                    //
+                    //       NOTE: Register "X" can be VF, the carry flag itself. According to a site
+                    //       which decompiled the original COSMAC VIP code the VF flag is set AFTER 
+                    //       the arithmetic. 
+                    // 
+                    //       See:
+                    //       https://laurencescotford.net/2020/07/19/chip-8-on-the-cosmac-vip-arithmetic-and-logic-instructions/
+                    else if(N == 4)
+                    {
+                        // I'm calculating the overflow by hand, that way we aren't dependent on language
+                        // specific byte overflow behavior.
+                        byte distanceFromMax = (byte)(byte.MaxValue - _registers[X]);
+
+                        if (_registers[Y] > distanceFromMax)
+                        {
+                            _registers[X] = (byte)(_registers[Y] - distanceFromMax - 1);
+                            _registers[0xF] = 0x1; 
+                        }
+                        else
+                        {
+                            _registers[X] += _registers[Y];
+                            _registers[0xF] = 0x0;
+                        }
+                    }
+
+                    // 8XY5: Sets VX to the result of VX - VY. VY is unaffected. VF is also set, see "SubtractToVX".
+                    else if (N == 5)
+                    {
+                        SubtractToVX(VX: X, minuend:_registers[X], subtrahend: _registers[Y]);
+                    }
+
+                    // 8XY7: Sets VX to the result of VY - VX. VY is unaffected. VF is also set, see "SubtractToVX".
+                    else if (N == 7)
+                    {
+                        SubtractToVX(VX: X, minuend: _registers[Y], subtrahend:_registers[X]);
+                    }
+
                     break;
 
                 //ANNN (set index register I)
@@ -246,8 +361,81 @@ namespace LandoWorks.Emulation.Chip8.Core
                     }
                     break;
 
-                default:
+                // [SKIP IF KEY]: These instructions (unlike the later FX0A) don’t wait for input.
+                //                They just check if the key is currently being held down.
+                case 0xE:
+                    // EX9E: Skip instruction if key IS pressed.
+                    // EXA1: Skip instruction if key is NOT pressed. 
+                    var key = _registers[X];
+                    var keyIsPressed = false;
+
+                    if (NN == 0x9E && keyIsPressed || NN == 0xA1 && !keyIsPressed)
+                        IncrementOneInstruction();
+                            
                     break;
+
+                case 0xF:
+                    // FX1E: Add to index
+                    //  The index register I will get the value in VX added to it.
+                    //
+                    //  Unlike other arithmetic instructions, this did not affect VF on overflow on the original COSMAC VIP. 
+                    //  However, it seems that some interpreters set VF to 1 if I “overflows” from 0FFF to above 1000 (outside
+                    //  the normal addressing range). This wasn’t the case on the original COSMAC VIP, at least, but apparently 
+                    //  the CHIP-8 interpreter for Amiga behaved this way. At least one known game, Spacefight 2091!, relies on
+                    //  this behavior. I don’t know of any games that rely on this not happening, so perhaps it’s safe to do it
+                    //  like the Amiga interpreter did.
+                    if (NN == 0x1E)
+                    {
+                        var newValue = _indexRegister + _registers[X];
+
+                        if (FX1E_OVERFLOW_VF && newValue >= RAM_SIZE)
+                            _registers[0xF] = 1;
+                        
+                        _indexRegister = (ushort)newValue;
+                    }
+                    break;
+
+                default:
+                    Debug.WriteLine($"Unhandled Opcode: {bits:X4}");
+                    break;
+            }
+        }
+
+        // This exists just so I don't forget that an instruction is 2 bytes.
+        private void  IncrementOneInstruction()
+        {
+            _programCounter += 0x2;
+        }
+
+        private void SubtractToVX(byte VX, byte minuend, byte subtrahend)
+        {
+            //      This subtraction will also affect the carry flag, but note that it’s opposite
+            //      from what you might think. If the minuend (the first operand) is larger than or
+            //      equal to the subtrahend (second operand), VF will be set to 1. If the subtrahend
+            //      is larger, and we “underflow” the result, VF is set to 0. 
+            // 
+            //      Another way of thinking of it is that VF is set to 1 before the subtraction, and 
+            //      then the subtraction either borrows from VF (setting it to 0) or not.
+            // 
+            //      NOTE NOTE NOTE:
+            //      The reason, by the way, that the flag seems opposite of what it should is likely
+            //      because CPUs subtract by adding the twos compliment, which in the case of a subtraction
+            //      which would overflow would cause said addition to NOT carry. 
+             if (minuend >= subtrahend) {
+                _registers[VX] = (byte)(minuend - subtrahend);
+                _registers[0xF] = 1;
+            } else {
+                // We're supposed to be doing: X = minuend - subtrahend, but if the subtrahend 
+                // is greater than the minuend then we need to figure out how much it would wrap 
+                // around, without doing so, just so we aren't tied to a specific sized data type.
+                //
+                // The best way to do this is to flip the values and do subtrahend - minuend, 
+                // which gives us a positive number for how far into the negatives we would go. 
+                // Since we can't  start from 0 though (since that would be 256) we have to subtract
+                // it from 255 instead and then add one back to compensate.
+                var amount = (byte)(subtrahend - minuend);
+                _registers[VX] = (byte)(byte.MaxValue - amount + 1);
+                _registers[0xF] = 0;
             }
         }
 
