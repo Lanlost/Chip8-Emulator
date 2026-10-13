@@ -28,12 +28,12 @@ Subtract
 8xy7                                    ☑
 
 Shift
-8xy6                                    ☐ 
-8xye                                    ☐ 
+8xy6                                    ☑ 
+8xye                                    ☑
 
 Annn - Set Index                        ☑
-Bnnn - Jump w/ offset                   ☐ 
-Cxnn - Random                           ☐ 
+Bnnn - Jump w/ offset                   ☑ 
+Cxnn - Random                           ☑ 
 Dxyn - Display                          ☑
 
 Skip If Key
@@ -41,18 +41,18 @@ Ex9e                                    ☑*
 Exa1                                    ☑*
 
 Timers
-Fx07                                    ☐ 
-Fx15                                    ☐ 
-Fx18                                    ☐ 
+Fx07                                    ☑ 
+Fx15                                    ☑ 
+Fx18                                    ☑ 
 
 Fx1e - Add to index                     ☑
 Fx0a - Get key                          ☐ 
-Fx29 - Font Character                   ☐ 
-Fx33 - Binary-coded decimal conversion  ☐ 
+Fx29 - Font Character                   ☑ 
+Fx33 - Binary-coded decimal conversion  ☑ 
 
 Store and Load Memory
-Fx55                                    ☐ 
-Fx65                                    ☐ 
+Fx55                                    ☑ 
+Fx65                                    ☑ 
 
 				   22 / 34
 

@@ -7,8 +7,17 @@ namespace LandoWorks.Emulation.Chip8.Core
     public class Interpreter
     {
         #region Support Config
-        const bool FX1E_OVERFLOW_VF = true; // False for COSMAC VIP, but some games require it and it shouldn't be harmful.
-        const bool BNNN_OFFSET_BUG = false; // False for COSMAC VIP. CHIP-48 and SUPER-CHIP introduced this bug. Recommended false.
+        const bool _FX1E_OVERFLOW_VF = true; // False for COSMAC VIP, but some games require it and it shouldn't be harmful. DEFAULT: TRUE
+        const bool _BNNN_OFFSET_BUG = false; // False for COSMAC VIP. CHIP-48 and SUPER-CHIP introduced this bug. DEFAULT: false.
+        
+        // True for COSMAC VIP. It incremented the value of index register when storing/loading registers. Modern programs do not. DEFAULT: false.
+        // Use the modern behavior (false) as it will let you run the common CHIP-8 roms you find, as well as the test suites which depend on it. 
+        const bool _FX55_FX65_INCREMENT_I = false;   
+
+        // True for COSMAC VIP. For the shift left & right functions it would first copy VY into VX before shifting.
+        // CHIP-48 and SUPER-CHIP shift in place. No real recommendation. Some ROMs use it, some don't! 
+        const bool _8XY6_8XYE_SHIFT_VY = false;
+
         #endregion
 
         #region Private Variables
@@ -309,6 +318,40 @@ namespace LandoWorks.Emulation.Chip8.Core
                         handled = true;
                     }
 
+                    // 8XY6: Shift Right [Ambiguous instruction!]
+                    //
+                    //       In the CHIP-8 interpreter for the original COSMAC VIP, this instruction did the following: 
+                    //       It put the value of VY into VX, and then shifted the value in VX 1 bit to the right (8XY6) 
+                    //       or left (8XYE). VY was not affected, but the flag register VF would be set to the bit that 
+                    //       was shifted out.
+                    //       
+                    //       However, starting with CHIP-48 and SUPER-CHIP in the early 1990s, these instructions were 
+                    //       changed so that they shifted VX in place, and ignored the Y completely.
+                    else if (N == 6)
+                    {
+
+                        if (_8XY6_8XYE_SHIFT_VY)
+                            _registers[X] = _registers[Y];
+                        
+                        var shiftedBit = (byte)(_registers[X] & 0x1);
+                        _registers[X] >>= 1;
+                        _registers[0xF] = shiftedBit;
+                        handled = true;
+                    }
+
+                    // 8XYE: Shift Left
+                    else if (N == 0xE)
+                    {
+                        if (_8XY6_8XYE_SHIFT_VY)
+                            _registers[X] = _registers[Y];
+                        
+                        // Even though we are shifting to the left, shift the 
+                        // bit to the right and AND it with 1 to read it.
+                        var shiftedBit = (byte)(_registers[X] >> 7 & 0x1);
+                        _registers[X] <<= 1;
+                        _registers[0xF] = shiftedBit;
+                        handled = true;
+                    }
                     break;
 
                 // ANNN: (set index register I)
@@ -330,7 +373,7 @@ namespace LandoWorks.Emulation.Chip8.Core
                     //     The BNNN instruction was not widely used, so you might be able to just implement the first behavior (if you pick one, 
                     //     that’s definitely the one to go with). If you want to support a wide range of CHIP-8 programs, make this “quirk” 
                     //     configurable.
-                    var offset = BNNN_OFFSET_BUG ? _registers[X] : _registers[0x0];
+                    var offset = _BNNN_OFFSET_BUG ? _registers[X] : _registers[0x0];
                     _programCounter = (ushort)(NNN + offset);
                     handled = true;
                     break;
@@ -444,7 +487,7 @@ namespace LandoWorks.Emulation.Chip8.Core
                     {
                         var newValue = (ushort)(_indexRegister + _registers[X]);
 
-                        if (FX1E_OVERFLOW_VF && newValue >= RAM_SIZE)
+                        if (_FX1E_OVERFLOW_VF && newValue >= RAM_SIZE)
                             _registers[0xF] = 1;
                         
                         _indexRegister = newValue;
@@ -461,17 +504,58 @@ namespace LandoWorks.Emulation.Chip8.Core
                     else if (NN == 0x33)
                     {
                         var number = _registers[X];
-                        byte divisor = 100;
-                        var curAddress = _indexRegister;
 
-                        while (divisor >= 1)
-                        {
-                            _ram[curAddress++] = (byte)(number / divisor);
-                            number = (byte)(number % divisor);
-                            divisor = (byte)(divisor / 10);
-                        }
+                        _ram[_indexRegister + 0] = (byte)(number / 100); number %= 100;          
+                        _ram[_indexRegister + 1] = (byte)(number / 10);  number %= 10;
+                        _ram[_indexRegister + 2] = (byte)(number / 1);
+
+                        handled = true;
                     }
                     
+                    // FX55: Store V0 -> VX in successive memory locations starting at I.
+                    //       For FX55, the value of each variable register from V0 to VX inclusive 
+                    //       (if X is 0, then only V0) will be stored in successive memory addresses, 
+                    //       starting with the one that’s stored in I. V0 will be stored at the address 
+                    //       in I, V1 will be stored in I + 1, and so on, until VX is stored in I + X.
+                    //
+                    // NOTE: This one, unlike FX29 one, acutally DOES use "X" directly as which register to
+                    //       use, as opposed to reading _registers[X] to get the value to use...
+                    //
+                    else if (NN == 0x55)
+                    {
+                        var originalIndex = _indexRegister;
+
+                        for(byte i = 0; i <= X; i++)
+                        {
+                            // Modern implementations use an index and don't modify the index register.
+                            _ram[originalIndex + i] = _registers[i];
+
+                            // Original implementations do, however. This allows either approach via flag.
+                            if (_FX55_FX65_INCREMENT_I) {
+                                _indexRegister++;
+                            }
+                        }
+                        
+                        handled = true;
+                    }
+
+                    else if (NN == 0x65)
+                    {
+                        var originalIndex = _indexRegister;
+
+                        for(byte i = 0; i <= X; i++)
+                        {
+                            // Modern implementations use an index and don't modify the index register.
+                            _registers[i] = _ram[originalIndex + i];
+
+                            // Original implementations do, however. This allows either approach via flag.
+                            if (_FX55_FX65_INCREMENT_I) {
+                                _indexRegister++;
+                            }
+                        }
+
+                        handled = true;
+                    }
                     break;
 
                 default: 

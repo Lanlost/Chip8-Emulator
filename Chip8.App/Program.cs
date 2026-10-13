@@ -6,12 +6,15 @@ namespace LandoWorks.Emulation.Chip8
 {
     public class Program
     {
+        const int STEPS_PER_SECOND = 10;
+
         public static void Main()
         {
 
             var interpreter = new Interpreter();
-            //interpreter.LoadRom("./roms/Space Invaders [David Winter].ch8");
             //interpreter.LoadRom("./roms/IBM Logo.ch8");
+            //interpreter.LoadRom("./roms/test_opcode.ch8");
+            //interpreter.LoadRom("./roms/Space Invaders [David Winter].ch8");
             interpreter.LoadRom("./roms/pong.ch8");
             
             interpreter.Start();
@@ -20,7 +23,10 @@ namespace LandoWorks.Emulation.Chip8
 
             frontend.Run((r) =>
             {
-                interpreter.Step();
+                for(var i = 0; i < STEPS_PER_SECOND; i++) {
+                    interpreter.Step();
+                }
+
                 r.Draw(interpreter.Display);
             });
 
@@ -28,17 +34,3 @@ namespace LandoWorks.Emulation.Chip8
         }
     }
 }
-
-
-// Raylib.InitWindow(WindowWidth, WindowHeight, "Chip 8 Interpreter");
-// Raylib.SetTargetFPS(60);
-
-// while (!Raylib.WindowShouldClose())
-// {
-//     Raylib.BeginDrawing();
-//     Raylib.ClearBackground(Color.Black);
-//     Raylib.DrawText("Hello, Raylib!", 10, 10, 20, Color.White);
-//     Raylib.EndDrawing();
-// }
-
-// Raylib.CloseWindow();
