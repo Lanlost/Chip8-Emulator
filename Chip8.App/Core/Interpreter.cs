@@ -122,8 +122,9 @@ namespace LandoWorks.Emulation.Chip8.Core
 
         private static long TICK_TIMER_FREQUENCY = Stopwatch.Frequency / 60;
         private long nextTick = TICK_TIMER_FREQUENCY;
+        private bool _fxoaSuccess = false;
 
-        public void Step()
+        public void Step(Dictionary<byte, bool> keys)
         {
             var haveTicked = _timer.HasTicked();
 
@@ -136,10 +137,9 @@ namespace LandoWorks.Emulation.Chip8.Core
             byte b1 = _ram[_programCounter];
             byte b2 = _ram[_programCounter + 1];
 
-            IncrementOneInstruction();
 
             ushort bits = (ushort)(b1 << 8 | b2);
-            
+
             // Decode
             // O: The first nibble. Used for opcode categories.
             // X: The second nibble. Used to look up one of the 16 registers (VX) from V0 through VF.
@@ -156,6 +156,11 @@ namespace LandoWorks.Emulation.Chip8.Core
             ushort NNN = (ushort)(bits & 0x0FFF);
 
             var handled = false;
+
+            if (!(O == 0xF && NN == 0x0A && _fxoaSuccess)) {           
+                IncrementOneInstruction();
+                _fxoaSuccess = false;
+            }
 
             switch(O)
             {
@@ -329,7 +334,6 @@ namespace LandoWorks.Emulation.Chip8.Core
                     //       changed so that they shifted VX in place, and ignored the Y completely.
                     else if (N == 6)
                     {
-
                         if (_8XY6_8XYE_SHIFT_VY)
                             _registers[X] = _registers[Y];
                         
@@ -422,16 +426,18 @@ namespace LandoWorks.Emulation.Chip8.Core
                 // [SKIP IF KEY]: These instructions (unlike the later FX0A) don’t wait for input.
                 //                They just check if the key is currently being held down.
                 case 0xE:
+                {
                     // EX9E: Skip instruction if key IS pressed.
                     // EXA1: Skip instruction if key is NOT pressed. 
                     var key = _registers[X];
-                    var keyIsPressed = false;
+                    var keyIsPressed = keys[key];
 
                     if (NN == 0x9E && keyIsPressed || NN == 0xA1 && !keyIsPressed)
                         IncrementOneInstruction();
                             
                     handled = true;
                     break;
+                }
 
                 case 0xF:
                     // FX07: [TIMER] sets VX to the current value of the delay timer
@@ -455,10 +461,14 @@ namespace LandoWorks.Emulation.Chip8.Core
                         handled = true;
                     }
 
-                    // FX0A: Get Key
+                    // FX0A: Get Key - Blocks until key is pressed.
                     else if (NN == 0x0A)
                     {
-                        // ToDO:
+                        var key = _registers[X];
+                        var keyIsPressed = keys[key];
+
+                        if (keyIsPressed)
+                            _fxoaSuccess = true;
                     }
 
                     // FX29: Font Character

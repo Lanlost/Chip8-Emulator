@@ -29,13 +29,19 @@ namespace LandoWorks.Emulation.Chip8.Core
         /// <returns></returns>
         public bool PlotPixel(int x, int y, bool on)
         {
-            var original = Memory[(y * Width) + x];
-            var now = (byte)(on ? 0xFF: 0x00);
+            try {
+                var original = Memory[(y * Width) + x];
+                var now = (byte)(on ? 0xFF: 0x00);
 
-            Memory[(y * Width) + x] = (byte)(original ^ now);
+                Memory[(y * Width) + x] = (byte)(original ^ now);
 
-            // This is the only situation where a bit will be turned off.
-            return original == 0xFF && on;
+                // This is the only situation where a bit will be turned off.
+                return original == 0xFF && on;
+            }
+            catch
+            {
+                return false;
+            }
         }
     }
 }

@@ -1,6 +1,7 @@
 ﻿using System;
 using LandoWorks.Emulation.Chip8.Core;
 using LandoWorks.Emulation.Chip8.Frontend;
+using Raylib_cs;
 
 namespace LandoWorks.Emulation.Chip8
 {
@@ -21,13 +22,13 @@ namespace LandoWorks.Emulation.Chip8
 
             var frontend = new RaylibFrontend(64 * 10, 32 * 10);
 
-            frontend.Run((r) =>
+            frontend.Run((keys, renderer) =>
             {
                 for(var i = 0; i < STEPS_PER_SECOND; i++) {
-                    interpreter.Step();
+                    interpreter.Step(keys);
                 }
 
-                r.Draw(interpreter.Display);
+                renderer.Draw(interpreter.Display);
             });
 
             //interpreter.ViewRam(0x0);
