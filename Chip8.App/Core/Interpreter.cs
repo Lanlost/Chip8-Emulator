@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Formats.Asn1;
 using Raylib_cs;
 
 namespace LandoWorks.Emulation.Chip8.Core
@@ -64,6 +65,8 @@ namespace LandoWorks.Emulation.Chip8.Core
             { 0xF0, 0x80, 0xF0, 0x80, 0x80 }  // F
         };
 
+        private readonly Dictionary<byte, bool> _previousControlState = []; 
+
         private Timer _timer;
         #endregion
         
@@ -124,7 +127,7 @@ namespace LandoWorks.Emulation.Chip8.Core
         private long nextTick = TICK_TIMER_FREQUENCY;
         private bool _fxoaSuccess = false;
 
-        public void Step(Dictionary<byte, bool> keys)
+        public void Step(Dictionary<byte, bool> currentControlState)
         {
             var haveTicked = _timer.HasTicked();
 
@@ -136,7 +139,6 @@ namespace LandoWorks.Emulation.Chip8.Core
             // Fetch
             byte b1 = _ram[_programCounter];
             byte b2 = _ram[_programCounter + 1];
-
 
             ushort bits = (ushort)(b1 << 8 | b2);
 
@@ -156,8 +158,9 @@ namespace LandoWorks.Emulation.Chip8.Core
             ushort NNN = (ushort)(bits & 0x0FFF);
 
             var handled = false;
+            var isFX0ABlocking = O == 0xF && NN == 0x0A && !_fxoaSuccess;
 
-            if (!(O == 0xF && NN == 0x0A && _fxoaSuccess)) {           
+            if (!isFX0ABlocking) {           
                 IncrementOneInstruction();
                 _fxoaSuccess = false;
             }
@@ -430,7 +433,7 @@ namespace LandoWorks.Emulation.Chip8.Core
                     // EX9E: Skip instruction if key IS pressed.
                     // EXA1: Skip instruction if key is NOT pressed. 
                     var key = _registers[X];
-                    var keyIsPressed = keys[key];
+                    var keyIsPressed = currentControlState[key];
 
                     if (NN == 0x9E && keyIsPressed || NN == 0xA1 && !keyIsPressed)
                         IncrementOneInstruction();
@@ -462,13 +465,25 @@ namespace LandoWorks.Emulation.Chip8.Core
                     }
 
                     // FX0A: Get Key - Blocks until key is pressed.
+                    //       On the original COSMAC VIP, the key was only registered when 
+                    //       it was pressed and then released.
                     else if (NN == 0x0A)
                     {
-                        var key = _registers[X];
-                        var keyIsPressed = keys[key];
+                        bool _FX0A_WAIT_FOR_RELEASE = true;
 
-                        if (keyIsPressed)
+                        var key = currentControlState
+                            .Where(x => {
+                                return _FX0A_WAIT_FOR_RELEASE 
+                                    ? _previousControlState[x.Key] && !x.Value 
+                                    : x.Value;
+                            })
+                            .Select(x => (byte?)x.Key)
+                            .FirstOrDefault();
+
+                        if (key.HasValue) {
+                            _registers[X] = key.Value;
                             _fxoaSuccess = true;
+                        }
                     }
 
                     // FX29: Font Character
@@ -576,6 +591,8 @@ namespace LandoWorks.Emulation.Chip8.Core
             {
                 Debug.WriteLine($"Unhandled Opcode: {bits:X4}");
             }
+
+            CopyControlState(currentControlState, _previousControlState);
         }
 
         // This exists just so I don't forget that an instruction is 2 bytes.
@@ -651,6 +668,14 @@ namespace LandoWorks.Emulation.Chip8.Core
         {
             // 0xF0 = 1111 0000 → "████    "
             return (spriteByte << xIndex & 0x80) == 0x80;
+        }
+
+        private static void CopyControlState(Dictionary<byte, bool> from, Dictionary<byte, bool> to)
+        {
+            foreach(var entry in from)
+            {
+                to[entry.Key] = entry.Value;
+            }
         }
 
         public void ViewRam(int start, int? length = null)
