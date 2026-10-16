@@ -15,8 +15,8 @@ namespace LandoWorks.Emulation.Chip8
             var interpreter = new Interpreter();
             //interpreter.LoadRom("./roms/IBM Logo.ch8");
             //interpreter.LoadRom("./roms/test_opcode.ch8");
-            //interpreter.LoadRom("./roms/Space Invaders [David Winter].ch8");
-            interpreter.LoadRom("./roms/pong.ch8");
+            interpreter.LoadRom("./roms/Space Invaders [David Winter].ch8");
+            //interpreter.LoadRom("./roms/pong.ch8");
             
             interpreter.Start();
 

@@ -58,6 +58,8 @@ namespace LandoWorks.Emulation.Chip8.Frontend
                 UpdateControlState();
                 loop(_controlState, this);                
             }
+
+            Raylib.CloseWindow();
         }
 
         private void UpdateControlState()

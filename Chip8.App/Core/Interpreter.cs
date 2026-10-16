@@ -19,6 +19,8 @@ namespace LandoWorks.Emulation.Chip8.Core
         // CHIP-48 and SUPER-CHIP shift in place. No real recommendation. Some ROMs use it, some don't! 
         const bool _8XY6_8XYE_SHIFT_VY = false;
 
+        // True for COSMAC VIP. When blocking & waiting for a key, the original COSMAP would wait for key release. 
+        const bool _FX0A_WAIT_FOR_RELEASE = true;
         #endregion
 
         #region Private Variables
@@ -125,7 +127,6 @@ namespace LandoWorks.Emulation.Chip8.Core
 
         private static long TICK_TIMER_FREQUENCY = Stopwatch.Frequency / 60;
         private long nextTick = TICK_TIMER_FREQUENCY;
-        private bool _fxoaSuccess = false;
 
         public void Step(Dictionary<byte, bool> currentControlState)
         {
@@ -137,10 +138,10 @@ namespace LandoWorks.Emulation.Chip8.Core
             }
 
             // Fetch
-            byte b1 = _ram[_programCounter];
-            byte b2 = _ram[_programCounter + 1];
+            byte highByte = _ram[_programCounter];
+            byte lowByte = _ram[_programCounter + 1];
 
-            ushort bits = (ushort)(b1 << 8 | b2);
+            ushort opcode = (ushort)(_ram[_programCounter] << 8 | lowByte);
 
             // Decode
             // O: The first nibble. Used for opcode categories.
@@ -149,21 +150,15 @@ namespace LandoWorks.Emulation.Chip8.Core
             // N: The fourth nibble. A 4-bit number.
             // NN: The second byte (third and fourth nibbles). An 8-bit immediate number.
             // NNN: The second, third and fourth nibbles. A 12-bit immediate memory address.
-
-            byte O     = (byte)((bits & 0xF000) >> 12);
-            byte X     = (byte)((bits & 0x0F00) >> 8);
-            byte Y     = (byte)((bits & 0x00F0) >> 4);
-            byte N     = (byte)(bits & 0x000F);
-            byte NN    = (byte)(bits & 0x00FF);
-            ushort NNN = (ushort)(bits & 0x0FFF);
+            byte O     = (byte)((opcode & 0xF000) >> 12);
+            byte X     = (byte)((opcode & 0x0F00) >> 8);
+            byte Y     = (byte)((opcode & 0x00F0) >> 4);
+            byte N     = (byte)(opcode & 0x000F);
+            byte NN    = (byte)(opcode & 0x00FF);
+            ushort NNN = (ushort)(opcode & 0x0FFF);
 
             var handled = false;
-            var isFX0ABlocking = O == 0xF && NN == 0x0A && !_fxoaSuccess;
-
-            if (!isFX0ABlocking) {           
-                IncrementOneInstruction();
-                _fxoaSuccess = false;
-            }
+            IncrementOneInstruction();
 
             switch(O)
             {
@@ -392,36 +387,15 @@ namespace LandoWorks.Emulation.Chip8.Core
                     handled = true;
                     break;
 
+                // DXYN: Display
+                //       Draw an N pixels tall sprite, from the address in the index register,
+                //       at coordinates specified by the VX and VY registers. Sets VF if there
+                //       was a collision. See "DrawSprite" for more details.           
                 case 0xD:
-                    /* DXYN: Display
-                        This is the most involved instruction. It will draw an N pixels tall sprite 
-                        from the memory location that the I index register is holding to the screen, 
-                        at the horizontal X coordinate in VX and the Y coordinate in VY. All the pixels 
-                        that are “on” in the sprite will flip the pixels on the screen that it is drawn 
-                        to (from left to right, from most to least significant bit). If any pixels on the
-                        screen were turned “off” by this, the VF flag register is set to 1. 
-                        Otherwise, it’s set to 0.
-                    */
-                    
-                    var cx = _registers[X];
-                    var cy = _registers[Y];
-                    
-                    var address = _indexRegister;
-                    var spriteHeight = N;
-                    
-                    for(var row = 0; row < spriteHeight; row++) 
-                    {
-                        for(var column = 0; column < 8; column++)
-                        {   
-                            var pixelOn = GetSpritePixel(_ram[address], column);
-                            var wasUnset = Display.PlotPixel(cx + column, cy + row, pixelOn);
+                    _registers[0xF] = 0x0;
 
-                            if (wasUnset)
-                                _registers[0xF] = 0x1;
-                        }
-
-                        address += 0x1;
-                    }
+                    if (DrawSprite(x: _registers[X], y: _registers[Y], address: _indexRegister, height: N))
+                        _registers[0xF] = 1;
 
                     handled = true;
                     break;
@@ -465,12 +439,10 @@ namespace LandoWorks.Emulation.Chip8.Core
                     }
 
                     // FX0A: Get Key - Blocks until key is pressed.
-                    //       On the original COSMAC VIP, the key was only registered when 
-                    //       it was pressed and then released.
+                    //       On the original COSMAC VIP, the key was only  
+                    //       registered when it was pressed and then released.
                     else if (NN == 0x0A)
                     {
-                        bool _FX0A_WAIT_FOR_RELEASE = true;
-
                         var key = currentControlState
                             .Where(x => {
                                 return _FX0A_WAIT_FOR_RELEASE 
@@ -480,20 +452,20 @@ namespace LandoWorks.Emulation.Chip8.Core
                             .Select(x => (byte?)x.Key)
                             .FirstOrDefault();
 
-                        if (key.HasValue) {
+                        if (!key.HasValue) {
+                            _programCounter-=0x2;
+                        } else {
                             _registers[X] = key.Value;
-                            _fxoaSuccess = true;
                         }
                     }
 
                     // FX29: Font Character
                     //       The index register I is set to the address of the hexadecimal character in VX.
-                    //       An 8-bit register can hold two hexadecimal numbers, but this would only point to one character.
-                    //       original COSMAC VIP interpreter just took the last nibble of VX and used that as the character.
+                    //       An 8-bit register has space to hold two hex values, but there is only one index
+                    //       register to store the address, so it sets it to the address of the character in
+                    //       the last nibble.
                     else if (NN == 0x29)
                     {
-                        // NOTE: It kind of baffles me that when the font only consists of 0-F that they don't
-                        // just use X directly. e.g. F029 would be character 0, FF29 would be character F...
                         var chrIndex = (byte)(_registers[X] & 0x0F);
                         _indexRegister = (ushort)(FONT_ADDRESS + (chrIndex * _font.GetLength(1))); 
                         handled = true;
@@ -589,7 +561,7 @@ namespace LandoWorks.Emulation.Chip8.Core
 
             if (!handled)
             {
-                Debug.WriteLine($"Unhandled Opcode: {bits:X4}");
+                Debug.WriteLine($"Unhandled Opcode: {opcode:X4}");
             }
 
             CopyControlState(currentControlState, _previousControlState);
@@ -633,30 +605,6 @@ namespace LandoWorks.Emulation.Chip8.Core
             }
         }
 
-        /// <summary>
-        /// Gets an entire row of pixels from a byte.
-        /// </summary>
-        /// <param name="spriteByte"></param>
-        /// <returns></returns>
-        private bool[] GetSpritePixels(byte spriteByte)
-        {
-            // 0xF0 = 1111 0000 → "████    "
-            var pixels = new bool[8];
-
-            for(var i = 0; i < pixels.Length; i++)
-            {
-                // 'AND' the sprite bits with '1000 0000' so only the
-                // MSB exists, and if it is '1000 0000' then we know
-                // that bit was on. Then shift to the left for the next
-                // bit.
-                var isOn = (spriteByte & 0x80) == 0x80;
-                spriteByte <<=1;
-
-                pixels[i] = isOn;
-            } 
-
-            return pixels;
-        }
 
         /// <summary>
         /// Gets an individual pixel from a sprite byte.
@@ -664,10 +612,56 @@ namespace LandoWorks.Emulation.Chip8.Core
         /// <param name="spriteByte"></param>
         /// <param name="xIndex"></param>
         /// <returns></returns>
-        private bool GetSpritePixel(byte spriteByte, int xIndex)
+        private bool IsSpriteBitOn(byte spriteByte, int xIndex)
         {
             // 0xF0 = 1111 0000 → "████    "
             return (spriteByte << xIndex & 0x80) == 0x80;
+        }
+
+        /// <summary>
+        /// Draws a sprite from the specified memory address at the given coordinates.
+        /// </summary>
+        /// <remarks>
+        /// Each sprite row consists of 8 bits, with each set bit toggling the
+        /// corresponding display pixel.
+        ///
+        /// The starting coordinates wrap within the display dimensions, but
+        /// individual pixels extending beyond the display are clipped.
+        ///
+        /// If any display pixel is turned off, the VF register is set to 1.
+        /// Otherwise, it is set to 0.
+        /// </remarks>
+        /// <param name="x">Starting horizontal coordinate.</param>
+        /// <param name="y">Starting vertical coordinate.</param>
+        /// <param name="address">Memory address of the first sprite byte.</param>
+        /// <param name="height">Number of sprite rows (bytes) to draw.</param>
+        private bool DrawSprite(byte x, byte y, ushort address, byte height)
+        {
+            var hadCollision = false;
+
+            // Sprite STARTING X & Y coodinates wrap within their row / column.
+            // e.g. 64 is 0, 65 is 1, etc. (62, 63, 0, 1, 2). But the actual pixels 
+            // drawn are clipped if they fall outside the range. 
+            x %= Display.Width;
+            y %= Display.Height;
+
+            for(var row = 0; row < height; row++) 
+            {
+                for(var column = 0; column < 8; column++)
+                {   
+                    if (!IsSpriteBitOn(_ram[address], column))
+                        continue;
+
+                    var toggleStatus = Display.TogglePixel(x + column, y + row);
+
+                    if (toggleStatus == Display.PixelToggleStatus.TurnedOff)
+                        hadCollision = true;
+                }
+
+                address += 0x1;
+            }
+
+            return hadCollision;
         }
 
         private static void CopyControlState(Dictionary<byte, bool> from, Dictionary<byte, bool> to)

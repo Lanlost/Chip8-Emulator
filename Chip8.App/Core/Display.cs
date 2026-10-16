@@ -4,44 +4,91 @@ namespace LandoWorks.Emulation.Chip8.Core
 {
     public class Display
     {
-        public int Width { get; }
-        public int Height { get; }
-        public byte[] Memory { get; }
+        #region Private Constants
+        private const byte PIXEL_ON = 0xFF;
+        #endregion
 
-        public Display(int width, int height)
+        #region Public Properties
+        public byte Width { get; }
+        public byte Height { get; }
+        public byte[] Memory { get; }
+        #endregion
+
+        #region Constructor(s)
+        public Display(byte width, byte height)
         {
             Width = width;
             Height = height;
             Memory = new byte[width * height];
         }
+        #endregion
 
+        #region Public Methods
         public void Clear()
         {
             Array.Clear(Memory);
         }
 
         /// <summary>
-        /// Plots a pixel to x, y. Returns if it was turned off.
+        /// Toggles a pixel at (x, y) unless outside the display range.
+        /// Returned PixelToggleStatus.TurnedOff indicates a collision.
         /// </summary>
-        /// <param name="x"></param>
-        /// <param name="y"></param>
-        /// <param name="on"></param>
-        /// <returns></returns>
-        public bool PlotPixel(int x, int y, bool on)
+        public PixelToggleStatus TogglePixel(int x, int y)
         {
-            try {
-                var original = Memory[(y * Width) + x];
-                var now = (byte)(on ? 0xFF: 0x00);
+            // Sprite starting coordinates wrap within their column/height
+            // (i.e. X: 62, 63, 0, 1, Y: 30, 31, 0, 1), but individual pixels
+            // never draw if they are outside the range.  
+            if (x < 0 || x >= Width || y < 0 || y >= Height)
+                return PixelToggleStatus.Clipped;
 
-                Memory[(y * Width) + x] = (byte)(original ^ now);
+            var original = Memory[(y * Width) + x];
+            Memory[(y * Width) + x] = (byte)(original ^ PIXEL_ON);
 
-                // This is the only situation where a bit will be turned off.
-                return original == 0xFF && on;
-            }
-            catch
-            {
-                return false;
-            }
+            return original != PIXEL_ON 
+                ? PixelToggleStatus.TurnedOn
+                : PixelToggleStatus.TurnedOff;
         }
+        #endregion
+
+        #region Helper Enum
+        public enum PixelToggleStatus
+        {
+            Clipped = 0,
+            TurnedOff = 1,
+            TurnedOn = 2,
+        }
+        #endregion    
     }
 }
+
+/*
+/// <summary>
+/// Plots a pixel to x, y, unless outside the display range.
+/// <paramref name="wasTurnedOff"/> is true if the pixel was 
+/// turned off, indicating a collision.
+/// </summary>
+/// <remarks>
+/// I'm using an 'out' variable instead of returning bool
+/// so that the behavior is self-documented and named, 
+/// ironically without a comment.
+/// </remarks>
+/// <param name="x"></param>
+/// <param name="y"></param>
+/// <param name="wasTurnedOff">
+/// <returns></returns>
+public void TogglePixel(int x, int y, out bool wasTurnedOff)
+{
+    wasTurnedOff = false;
+
+    // Sprite starting coordinates wrap within their column/height
+    // (i.e. X: 62, 63, 0, 1, Y: 30, 31, 0, 1), but individual pixels
+    // never draw if they are outside the range.  
+    if (x < 0 || x >= Width || y < 0 || y >= Height)
+        return;
+
+    var original = Memory[(y * Width) + x];
+    Memory[(y * Width) + x] = (byte)(original ^ PIXEL_ON);
+
+    // This is the only situation where a bit will be turned off.
+    wasTurnedOff = original == PIXEL_ON;
+}*/
