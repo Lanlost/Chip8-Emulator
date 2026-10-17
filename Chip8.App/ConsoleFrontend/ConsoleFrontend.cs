@@ -36,8 +36,6 @@ namespace LandoWorks.Emulation.Chip8.Frontend
 
         public void Run(Action<Dictionary<byte, bool>, IRenderer> Loop)
         {
-            //Console.SetWindowSize(64, 32);
-            
             while(true) 
             {
                 ConsoleKeyInfo? key = null;
@@ -63,19 +61,49 @@ namespace LandoWorks.Emulation.Chip8.Frontend
             }
         }
 
+        // public void Draw(Display display)
+        // {
+        //     //Console.Clear();
+        //     Console.SetCursorPosition(0,0);
+
+        //     var column = 0;
+
+        //     foreach(var b in display.Memory)
+        //     {
+        //         Console.Write(b == 0xFF ? "█" : " ");
+                
+        //         if (++column >= display.Width)
+        //         {
+        //             column = 0;
+        //             Console.WriteLine();
+        //         }
+        //     }
+        // }
+        
         public void Draw(Display display)
         {
-            Console.SetCursorPosition(0, 0);
-            var column = 0;
+            int lastX = 0;
+            int lastY = 0;
 
-            foreach(var b in display.Memory)
+            Console.Clear();
+
+            for(var i = 0; i < display.Memory.Length; i++)
             {
-                Console.Write(b == 0xFF ? "█" : " ");
+                var value = display.Memory[i];
                 
-                if (++column == display.Width)
+                if (value == 0xFF)
                 {
-                    column = 0;
-                    Console.WriteLine();
+                    var x = i % display.Width;
+                    var y = i / display.Width; 
+
+                    if (lastX != x - 1) {
+                        Console.SetCursorPosition(x, y);
+                    }
+                    
+                    Console.Write('█');
+
+                    lastX = x;
+                    lastY = y;
                 }
             }
         }
