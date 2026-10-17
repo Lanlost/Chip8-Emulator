@@ -1,8 +1,4 @@
-﻿using System.Globalization;
-using System.Security.AccessControl;
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
-using Landoworks.Emulation.Chip8.Interfaces;
+﻿using Landoworks.Emulation.Chip8.Interfaces;
 using LandoWorks.Emulation.Chip8.Core;
 using Raylib_cs;
 
@@ -17,27 +13,27 @@ namespace LandoWorks.Emulation.Chip8.Frontend
         //     // 4 5 6 D  ->  q w e r
         //     // 7 8 9 E  ->  a s d f
         //     // A 0 B F      z x c v
-        private static (byte Button, KeyboardKey Key)[] _controlMap =
+        private static Dictionary<byte, KeyboardKey> _controlMap = new() 
         {
-            ( 0x1, KeyboardKey.One   ),
-            ( 0x2, KeyboardKey.Two   ),
-            ( 0x3, KeyboardKey.Three ),
-            ( 0xC, KeyboardKey.Four  ),
+            { 0x1, KeyboardKey.One   },
+            { 0x2, KeyboardKey.Two   },
+            { 0x3, KeyboardKey.Three },
+            { 0xC, KeyboardKey.Four  },
             
-            ( 0x4, KeyboardKey.Q ),
-            ( 0x5, KeyboardKey.W ),
-            ( 0x6, KeyboardKey.E ),
-            ( 0xD, KeyboardKey.R ),
+            { 0x4, KeyboardKey.Q },
+            { 0x5, KeyboardKey.W },
+            { 0x6, KeyboardKey.E },
+            { 0xD, KeyboardKey.R },
             
-            ( 0x7, KeyboardKey.A ),
-            ( 0x8, KeyboardKey.S ),
-            ( 0x9, KeyboardKey.D ),
-            ( 0xE, KeyboardKey.F ),
+            { 0x7, KeyboardKey.A },
+            { 0x8, KeyboardKey.S },
+            { 0x9, KeyboardKey.D },
+            { 0xE, KeyboardKey.F },
             
-            ( 0xA, KeyboardKey.Z ),
-            ( 0x0, KeyboardKey.X ),
-            ( 0xB, KeyboardKey.C ),
-            ( 0xF, KeyboardKey.V )
+            { 0xA, KeyboardKey.Z },
+            { 0x0, KeyboardKey.X },
+            { 0xB, KeyboardKey.C },
+            { 0xF, KeyboardKey.V }
         };
 
         private Dictionary<byte, bool> _controlState = new();
@@ -64,9 +60,9 @@ namespace LandoWorks.Emulation.Chip8.Frontend
 
         private void UpdateControlState()
         {
-            foreach(var value in _controlMap)
+            foreach(var entry in _controlMap)
             {
-                _controlState[value.Button] = Raylib.IsKeyDown(value.Key);
+                _controlState[entry.Key] = Raylib.IsKeyDown(entry.Value);
             }
         }
         
@@ -84,11 +80,6 @@ namespace LandoWorks.Emulation.Chip8.Frontend
                 var value = display.Memory[i];
                 var X = i % display.Width;
                 var Y = i / display.Width;
-
-                // if (value == 0xFF)
-                // {
-                //     var bkpt = true;
-                // }
 
                 var color = value == 0xFF 
                     ? new Color(255, 0, 0)

@@ -20,8 +20,9 @@ namespace LandoWorks.Emulation.Chip8
             
             interpreter.Start();
 
-            var frontend = new RaylibFrontend(64 * 10, 32 * 10);
-
+            //var frontend = new RaylibFrontend(64 * 10, 32 * 10);
+            var frontend = new ConsoleFrontend();
+            
             frontend.Run((keys, renderer) =>
             {
                 for(var i = 0; i < STEPS_PER_SECOND; i++) {

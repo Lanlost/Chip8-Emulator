@@ -407,7 +407,7 @@ namespace LandoWorks.Emulation.Chip8.Core
                     // EX9E: Skip instruction if key IS pressed.
                     // EXA1: Skip instruction if key is NOT pressed. 
                     var key = _registers[X];
-                    var keyIsPressed = currentControlState[key];
+                    var keyIsPressed = currentControlState.TryGetValue(key, out bool value) ? value : false;
 
                     if (NN == 0x9E && keyIsPressed || NN == 0xA1 && !keyIsPressed)
                         IncrementOneInstruction();
@@ -446,7 +446,7 @@ namespace LandoWorks.Emulation.Chip8.Core
                         var key = currentControlState
                             .Where(x => {
                                 return _FX0A_WAIT_FOR_RELEASE 
-                                    ? _previousControlState[x.Key] && !x.Value 
+                                    ? _previousControlState.TryGetValue(x.Key, out var prevKey) && prevKey && !x.Value
                                     : x.Value;
                             })
                             .Select(x => (byte?)x.Key)
