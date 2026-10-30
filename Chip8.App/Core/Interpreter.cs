@@ -1,7 +1,4 @@
-﻿using System;
-using System.Diagnostics;
-using System.Formats.Asn1;
-using Raylib_cs;
+﻿using System.Diagnostics;
 
 namespace LandoWorks.Emulation.Chip8.Core
 {
@@ -89,12 +86,20 @@ namespace LandoWorks.Emulation.Chip8.Core
             }
         }
 
+        private Stopwatch _stopWatch = new();
+        public long EmuTicks { get; set; }
+        public double EmuSeconds { get; set; }
+        public double RealSeconds { get; set; }
+        public int DelayRegister => _delayRegister;
+        
         public void Start()
         {
             InitializeRam(_rom);
             InitializeRegisters();
             _programCounter = ENTRY_POINT;
+
             _timer.Start();
+            _stopWatch.Start();
         }
 
         private void InitializeRam(byte[] rom)
@@ -125,16 +130,26 @@ namespace LandoWorks.Emulation.Chip8.Core
             _programCounter = ENTRY_POINT;
         }
 
-        private static long TICK_TIMER_FREQUENCY = Stopwatch.Frequency / 60;
-        private long nextTick = TICK_TIMER_FREQUENCY;
-
+        
         public void Step(Dictionary<byte, bool> currentControlState)
         {
-            var haveTicked = _timer.HasTicked();
+            RealSeconds = (double)_stopWatch.ElapsedTicks / Stopwatch.Frequency;
 
-            if (haveTicked) {
-                _delayRegister = (byte)Math.Max(0, _delayRegister - 1);
-                _soundRegister = (byte)Math.Max(0, _soundRegister - 1);
+            // Using _timer.HasTicked() ensures one tick per Step max
+            // so that every tick is always accounted for. Mostly because
+            // I didn't know if any games would specifically check for values
+            // since they can read the register directly. It adds drift though
+            // and isn't recommended.
+            //var ticksPassed = _timer.HasTicked() ? 1 : 0;
+            var ticksPassed = _timer.TicksPassed();
+
+            if (ticksPassed > 0)
+            {
+                EmuTicks += ticksPassed;
+                EmuSeconds = (double)EmuTicks / _timer.Hz;
+
+                _delayRegister = (byte)Math.Max(0, _delayRegister - ticksPassed);
+                _soundRegister = (byte)Math.Max(0, _soundRegister - ticksPassed);
             }
 
             // Fetch

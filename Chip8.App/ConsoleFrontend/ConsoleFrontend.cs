@@ -1,4 +1,4 @@
-using Landoworks.Emulation.Chip8.Interfaces;
+using LandoWorks.Emulation.Chip8.Interfaces;
 using LandoWorks.Emulation.Chip8.Core;
 
 namespace LandoWorks.Emulation.Chip8.Frontend
@@ -34,8 +34,14 @@ namespace LandoWorks.Emulation.Chip8.Frontend
 
         private static Dictionary<byte, bool> _controlState = new();
 
+        private int _debugConsoleRow = 0;
+        public int DebugConsoleRow => _debugConsoleRow;
+
         public void Run(Action<Dictionary<byte, bool>, IRenderer> Loop)
         {
+            Console.Clear();
+            Console.CursorVisible = false;
+            
             while(true) 
             {
                 ConsoleKeyInfo? key = null;
@@ -61,52 +67,131 @@ namespace LandoWorks.Emulation.Chip8.Frontend
             }
         }
 
+        // Full screen brute-force.
+        public void Draw2(Display display)
+        {
+            //Console.Clear(); // WAYYYY slower. Use SetCursorPosition.
+            Console.SetCursorPosition(0, 0);
+
+            var column = 0;
+
+            foreach(var b in display.Memory)
+            {
+                Console.Write(b == 0xFF ? "█" : " ");
+                
+                if (++column >= display.Width)
+                {
+                    column = 0;
+                    Console.WriteLine();
+                }
+            }
+
+        }
+        
+        // Striped
         // public void Draw(Display display)
         // {
-        //     //Console.Clear();
-        //     Console.SetCursorPosition(0,0);
+        //     int lastX = 0;
+        //     int lastY = 0;
 
-        //     var column = 0;
+        //     Console.Clear();
 
-        //     foreach(var b in display.Memory)
+        //     for(var i = 0; i < display.Memory.Length; i++)
         //     {
-        //         Console.Write(b == 0xFF ? "█" : " ");
+        //         var value = display.Memory[i];
                 
-        //         if (++column >= display.Width)
+        //         if (value == 0xFF)
         //         {
-        //             column = 0;
-        //             Console.WriteLine();
+        //             var x = i % display.Width;
+        //             var y = i / display.Width; 
+
+        //             if (lastX != x - 1) {
+        //                 Console.SetCursorPosition(x, y);
+        //             }
+                    
+        //             Console.Write('█');
+
+        //             lastX = x;
+        //             lastY = y;
         //         }
         //     }
         // }
+
+        // Entire Scanlines
+        // public void Draw(Display display)
+        // {
+        //     Console.SetCursorPosition(0,0);
+        //     var entireRow = string.Empty;
+        //     var row = 0;
+
+        //     for(var i = 0; i < display.Memory.Length; i++)
+        //     {
+        //         entireRow += display.Memory[i] == 0xFF ? '█' : " ";
+
+        //         if (entireRow.Length == display.Width)
+        //         {
+        //             Console.WriteLine(entireRow);
+        //             entireRow = string.Empty;
+        //         }
+        //     }
+        // }
+
+        // Entire Dirty Scanlines
+        private string[] _previousRows = [];
         
         public void Draw(Display display)
         {
-            int lastX = 0;
-            int lastY = 0;
+            if (_previousRows.Length == 0)
+                _previousRows = new string[display.Height];
 
-            Console.Clear();
+            Console.SetCursorPosition(0,0);
+            var entireRow = string.Empty;
+            var row = 0;
 
             for(var i = 0; i < display.Memory.Length; i++)
             {
-                var value = display.Memory[i];
-                
-                if (value == 0xFF)
+                entireRow += display.Memory[i] == 0xFF ? '█' : " ";
+
+                if (entireRow.Length == display.Width)
                 {
-                    var x = i % display.Width;
-                    var y = i / display.Width; 
-
-                    if (lastX != x - 1) {
-                        Console.SetCursorPosition(x, y);
+                    if (_previousRows[row] != entireRow)
+                    {
+                        Console.SetCursorPosition(0, row);
+                        Console.WriteLine(entireRow);
                     }
-                    
-                    Console.Write('█');
 
-                    lastX = x;
-                    lastY = y;
+                    _previousRows[row] = entireRow;
+                    entireRow = string.Empty;
+                    row++;
                 }
             }
+
+            // If for some reason the loop ended and never printed the last row, do it now.
+            if (!string.IsNullOrEmpty(entireRow)) {
+                Console.SetCursorPosition(0, row);
+                Console.WriteLine(entireRow);
+            }
+
+            // For debug output to always display on bottom, no matter how many dirty rows acutally displayed...
+            _debugConsoleRow = display.Height + 2;
         }
+
+        // Full Screen
+        // public void Draw(Display display)
+        // {
+        //     Console.SetCursorPosition(0,0);
+        //     var entireScreen = string.Empty;
+
+        //     for(var i = 0; i < display.Memory.Length; i++)
+        //     {
+        //         entireScreen += display.Memory[i] == 0xFF ? '█' : " ";
+
+        //         if ((i - 10) % display.Width == 0)
+        //             entireScreen += '\n';
+        //     }
+
+        //     Console.Write(entireScreen);
+        // }
     }
 }
 

@@ -12,11 +12,17 @@ namespace LandoWorks.Emulation.Chip8
         private long nextTick_TicksPassed;
         private long nextTick_HasTicked;
             
-        public Timer(long hz = 60)
+        public int Hz { get; }
+
+        public Timer(int hz = 60)
         {
+            Hz = hz;
+            
             Stopwatch = new Stopwatch();
             tickFrequency = Stopwatch.Frequency / hz;
+
             nextTick_HasTicked = tickFrequency;
+            nextTick_TicksPassed = tickFrequency;            
         }
 
         public void Start()
@@ -32,9 +38,9 @@ namespace LandoWorks.Emulation.Chip8
         /// <returns></returns>
         public bool HasTicked()
         {
-            var tickDifference = Stopwatch.ElapsedTicks - nextTick_HasTicked;
+            var ticksLeft = nextTick_HasTicked - Stopwatch.ElapsedTicks;
 
-            if (tickDifference < 0)
+            if (ticksLeft > 0)
                 return false;
 
             nextTick_HasTicked = Stopwatch.ElapsedTicks + tickFrequency;
@@ -53,12 +59,12 @@ namespace LandoWorks.Emulation.Chip8
             //
             // e.g. when using integer division: (100 - 150) / 100 + 1 = 1
             // because -50 / 100 = 0, not -0.5.
-            var tickDifference = Stopwatch.ElapsedTicks - nextTick_TicksPassed;
+            var tickDifference = nextTick_TicksPassed - Stopwatch.ElapsedTicks;
             var ticksPassed = 0;
 
-            if (tickDifference >= 0)
+            if (tickDifference <= 0)
             {
-                ticksPassed = (int)(tickDifference / tickFrequency) + 1;
+                ticksPassed = (int)(-tickDifference / tickFrequency) + 1;
                 nextTick_TicksPassed += ticksPassed * tickFrequency;
             }
 
@@ -66,23 +72,3 @@ namespace LandoWorks.Emulation.Chip8
         }
     }
 }
-
-/*
- public int Update()
-{
-    // We need to cast the elapsed ticks to a double so that we end up with
-    // -50.0 instead of -50 so that after the division we end up with -0.5
-    // instead of 0 for when we add one and then floor it. Otherwise an early
-    // timer would end up with one additional tick.
-    var ticksPassed = (double)(Stopwatch.ElapsedTicks - nextTick) / tickFrequency + 1;
-    ticksPassed = Math.Floor(ticksPassed);
-
-    if (ticksPassed > 0)
-    {
-        nextTick += (int)ticksPassed * tickFrequency;    
-        return (int)ticksPassed;
-    }
-
-    return 0;
-}
-*/

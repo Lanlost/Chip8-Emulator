@@ -1,4 +1,4 @@
-﻿using Landoworks.Emulation.Chip8.Interfaces;
+﻿using LandoWorks.Emulation.Chip8.Interfaces;
 using LandoWorks.Emulation.Chip8.Core;
 using Raylib_cs;
 
@@ -8,6 +8,9 @@ namespace LandoWorks.Emulation.Chip8.Frontend
     {
         private int _width;
         private int _height;
+
+        // We have nothing else printing to the console of importance, so just use the top row.
+        public int DebugConsoleRow => 0;
 
         //     // 1 2 3 C      1 2 3 4
         //     // 4 5 6 D  ->  q w e r
@@ -42,13 +45,13 @@ namespace LandoWorks.Emulation.Chip8.Frontend
         {
             _width = width;
             _height = height;
+
+            Raylib.InitWindow(_width, _height, "Chip 8 Interpreter");
+            Raylib.SetTargetFPS(60);
         }
         
         public void Run(Action<Dictionary<byte, bool>, IRenderer> loop)
         {
-            Raylib.InitWindow(_width, _height, "Chip 8 Interpreter");
-            Raylib.SetTargetFPS(60);
-            
             while(!Raylib.WindowShouldClose())
             {
                 UpdateControlState();
