@@ -1,6 +1,4 @@
-﻿using System;
-using System.Diagnostics;
-using Raylib_cs;
+﻿using System.Diagnostics;
 
 namespace LandoWorks.Emulation.Chip8
 {

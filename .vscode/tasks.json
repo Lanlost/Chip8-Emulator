@@ -1,0 +1,115 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build raylib debug",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/Chip8.RaylibApp/Chip8.RaylibApp.csproj",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary;ForceNoAlign"
+            ],
+            "problemMatcher": "$msCompile",
+
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+
+        {
+            "label": "build raylib release",
+            "type": "process",
+            "command": "dotnet",
+            "args": [
+                "build",
+                "${workspaceFolder}/Chip8.RaylibApp/Chip8.RaylibApp.csproj",
+                "-c",
+                "Release"
+            ],
+            "problemMatcher": "$msCompile",
+
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+
+        {
+            "label": "build console debug",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/Chip8.ConsoleApp/Chip8.ConsoleApp.csproj",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary;ForceNoAlign"
+            ],
+            "problemMatcher": "$msCompile",
+
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+
+        {
+            "label": "build console release",
+            "type": "process",
+            "command": "dotnet",
+            "args": [
+                "build",
+                "${workspaceFolder}/Chip8.ConsoleApp/Chip8.ConsoleApp.csproj",
+                "-c",
+                "Release"
+            ],
+            "problemMatcher": "$msCompile",
+
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+
+        {
+            "label": "publish raylib",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "publish",
+                "${workspaceFolder}/Chip8.RaylibApp/Chip8.RaylibApp.csproj",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary;ForceNoAlign"
+            ],
+            "problemMatcher": "$msCompile"
+        },
+
+        {
+            "label": "publish console",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "publish",
+                "${workspaceFolder}/Chip8.ConsoleApp/Chip8.ConsoleApp.csproj",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary;ForceNoAlign"
+            ],
+            "problemMatcher": "$msCompile"
+        },
+
+        {
+            "label": "watch",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "watch",
+                "run",
+                "--project",
+                "${workspaceFolder}/Chip8.RaylibApp/Chip8.RaylibApp.csproj"
+            ],
+            "problemMatcher": "$msCompile"
+        }
+    ]
+}

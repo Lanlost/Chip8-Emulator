@@ -1,0 +1,57 @@
+{
+    "configurations": [
+        {
+                "name": "Chip 8 - Raylib Frontend [debug]",
+                "type": "coreclr",
+                "request": "launch",
+                "preLaunchTask": "build raylib debug",
+                "console": "integratedTerminal",
+                "program": "${workspaceFolder}/Chip8.RaylibApp/bin/Debug/net10.0/Chip8.RaylibApp.dll",
+                "args": [],
+                "cwd": "${workspaceFolder}/Chip8.RaylibApp",
+                "stopAtEntry": false
+        },
+
+        {
+            "name": "Chip 8 - Console Frontend [debug]",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build console debug",
+            "program": "${workspaceFolder}/Chip8.ConsoleApp/bin/Debug/net10.0/Chip8.ConsoleApp.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/Chip8.ConsoleApp",
+            "console": "integratedTerminal",
+            "stopAtEntry": false
+        },
+
+        {
+                "name": "Chip 8 - Raylib Frontend",
+                "type": "coreclr",
+                "request": "launch",
+                "preLaunchTask": "build raylib release",
+                "console": "integratedTerminal",
+                "program": "${workspaceFolder}/Chip8.RaylibApp/bin/Release/net10.0/Chip8.RaylibApp.dll",
+                "args": [],
+                "cwd": "${workspaceFolder}/Chip8.RaylibApp",
+                "stopAtEntry": false
+        },
+
+        {
+            "name": "Chip 8 - Console Frontend",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build console release",
+            "program": "${workspaceFolder}/Chip8.ConsoleApp/bin/Release/net10.0/Chip8.ConsoleApp.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/Chip8.ConsoleApp",
+            "console": "integratedTerminal",
+            "stopAtEntry": false
+        },
+        
+        {
+            "name": ".NET Core Attach",
+            "type": "coreclr",
+            "request": "attach"
+        }
+    ]
+}

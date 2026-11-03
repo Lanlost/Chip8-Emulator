@@ -1,7 +1,5 @@
-﻿using System;
-using LandoWorks.Emulation.Chip8.Core;
+﻿using LandoWorks.Emulation.Chip8.Core;
 using LandoWorks.Emulation.Chip8.Frontend;
-using Raylib_cs;
 
 namespace LandoWorks.Emulation.Chip8
 {
@@ -11,7 +9,6 @@ namespace LandoWorks.Emulation.Chip8
 
         public static async Task Main()
         {
-
             var interpreter = new Interpreter();
             //interpreter.LoadRom("./roms/IBM Logo.ch8");
             //interpreter.LoadRom("./roms/test_opcode.ch8");
@@ -20,8 +17,7 @@ namespace LandoWorks.Emulation.Chip8
             
             interpreter.Start();
 
-            var frontend = new RaylibFrontend(64 * 10, 32 * 10);
-            //var frontend = new ConsoleFrontend();
+            var frontend = new ConsoleFrontend();
 
             Console.Clear();
 
