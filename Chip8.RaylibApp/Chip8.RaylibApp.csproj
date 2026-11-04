@@ -23,4 +23,12 @@
     <ProjectReference Include="..\Chip8.Core\Chip8.Core.csproj" />
   </ItemGroup>
 
+  <!-- Copy roms from solution folder to build folder before running. -->
+  <ItemGroup>
+    <Content Include="../roms/**/*">
+        <Link>roms/%(RecursiveDir)%(Filename)%(Extension)</Link>
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>

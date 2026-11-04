@@ -9,9 +9,6 @@ namespace LandoWorks.Emulation.Chip8.Frontend
         private int _width;
         private int _height;
 
-        // We have nothing else printing to the console of importance, so just use the top row.
-        public int DebugConsoleRow => 0;
-
         //     // 1 2 3 C      1 2 3 4
         //     // 4 5 6 D  ->  q w e r
         //     // 7 8 9 E  ->  a s d f

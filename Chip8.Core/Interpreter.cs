@@ -1,4 +1,6 @@
-﻿using System.Diagnostics;
+﻿using System.Data;
+using System.Diagnostics;
+using System.Text;
 
 namespace LandoWorks.Emulation.Chip8.Core
 {
@@ -70,20 +72,25 @@ namespace LandoWorks.Emulation.Chip8.Core
         #endregion
         
         public Display Display => _display;
-
+        
         public Interpreter()
         {
             _timer = new Timer(60);
             _display = new Display(width: 64, height: 32);
         }
 
-        public void LoadRom(string path)
+        public byte[] LoadRom(string path)
         {
+            if (!Path.Exists(path))
+                throw new FileNotFoundException(path);
+                
             _rom = File.ReadAllBytes(path);
             
             if (_rom.Length + ENTRY_POINT > RAM_SIZE) {
                 throw new Exception("Invalid rom; too large.");
             }
+
+            return _rom;
         }
 
         private Stopwatch _stopWatch = new();
@@ -92,14 +99,22 @@ namespace LandoWorks.Emulation.Chip8.Core
         public double RealSeconds { get; set; }
         public int DelayRegister => _delayRegister;
         
-        public void Start()
+        public void Initialize()
         {
             InitializeRam(_rom);
             InitializeRegisters();
-            _programCounter = ENTRY_POINT;
+        }
 
+        public void Start()
+        {
             _timer.Start();
             _stopWatch.Start();
+        }
+
+        public void Restart()
+        {
+            Initialize();
+            Start();
         }
 
         private void InitializeRam(byte[] rom)

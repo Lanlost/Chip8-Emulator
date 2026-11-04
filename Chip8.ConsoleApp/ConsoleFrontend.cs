@@ -1,5 +1,6 @@
 using LandoWorks.Emulation.Chip8.Interfaces;
 using LandoWorks.Emulation.Chip8.Core;
+using LandoWorks.Emulation.Chip8.ConsoleApp;
 
 namespace LandoWorks.Emulation.Chip8.Frontend
 {
@@ -32,15 +33,15 @@ namespace LandoWorks.Emulation.Chip8.Frontend
             { 0xF, ConsoleKey.V }
         };
 
-        private static Dictionary<byte, bool> _controlState = new();
+        private readonly Dictionary<byte, bool> _controlState = new();
 
-        private int _debugConsoleRow = 0;
-        public int DebugConsoleRow => _debugConsoleRow;
+        public DrawMode DrawMode { get; set; } = DrawMode.FullScreen;
+        public bool CursorVisible { set => Console.CursorVisible = value; }
 
+        #region Public Methods
         public void Run(Action<Dictionary<byte, bool>, IRenderer> Loop)
         {
             Console.Clear();
-            Console.CursorVisible = false;
             
             while(true) 
             {
@@ -59,6 +60,34 @@ namespace LandoWorks.Emulation.Chip8.Frontend
             }
         }
 
+        public void Draw(Display display)
+        {
+            switch (DrawMode)
+            {
+                case DrawMode.BruteForce:
+                    DrawBruteForce(display);
+                    break;
+
+                case DrawMode.FullScreen:
+                    DrawFullScreen(display);
+                    break;
+
+                case DrawMode.Scanlines:
+                    DrawScanlines(display);
+                    break;
+
+                case DrawMode.DirtyScanlines:
+                    DrawDirtyScanlines(display);
+                    break;
+
+                case DrawMode.Strips:
+                    DrawStrips(display);
+                    break;
+            }
+        }
+        #endregion
+
+        #region Private Methods
         private void UpdateControlState(ConsoleKeyInfo? key)
         {
             foreach(var entry in _controlMap)
@@ -66,11 +95,21 @@ namespace LandoWorks.Emulation.Chip8.Frontend
                 _controlState[entry.Key] = key.HasValue && entry.Value == key.Value.Key;
             }
         }
+        #endregion
 
-        // Full screen brute-force.
-        public void Draw2(Display display)
+        #region [Draw Modes] Private Methods
+        // --------------------------------------------------------
+        // NOTE: SEE 'Docs/DrawModes.md' FOR HISTORY / EXPLANATION!  
+        // --------------------------------------------------------
+        
+        /// <summary>
+        /// Full screen, brute-force.
+        /// </summary><remarks>
+        /// When using "Console.CursorVisible" this looks like a starfield background. ;-)
+        /// </remarks>
+        /// <param name="display"></param>
+        private void DrawBruteForce(Display display)
         {
-            //Console.Clear(); // WAYYYY slower. Use SetCursorPosition.
             Console.SetCursorPosition(0, 0);
 
             var column = 0;
@@ -85,61 +124,87 @@ namespace LandoWorks.Emulation.Chip8.Frontend
                     Console.WriteLine();
                 }
             }
-
         }
-        
-        // Striped
-        // public void Draw(Display display)
-        // {
-        //     int lastX = 0;
-        //     int lastY = 0;
 
-        //     Console.Clear();
+        /// <summary><para>
+        /// Draws strips of consecutive illuminated pixels. [AVOID!]
+        /// </para><para>
+        /// Clears the screen, then positions the cursor at the start of each strip
+        /// and draws consecutive illuminated pixels without repositioning.
+        /// </para></summary>
+        private void DrawStrips(Display display)
+        {
+            int lastX = 0;
 
-        //     for(var i = 0; i < display.Memory.Length; i++)
-        //     {
-        //         var value = display.Memory[i];
+            Console.Clear();
+
+            for(var i = 0; i < display.Memory.Length; i++)
+            {
+                var value = display.Memory[i];
                 
-        //         if (value == 0xFF)
-        //         {
-        //             var x = i % display.Width;
-        //             var y = i / display.Width; 
+                if (value == 0xFF)
+                {
+                    var x = i % display.Width;
+                    var y = i / display.Width; 
 
-        //             if (lastX != x - 1) {
-        //                 Console.SetCursorPosition(x, y);
-        //             }
+                    if (lastX != x - 1) {
+                        Console.SetCursorPosition(x, y);
+                    }
                     
-        //             Console.Write('█');
+                    Console.Write('█');
 
-        //             lastX = x;
-        //             lastY = y;
-        //         }
-        //     }
-        // }
+                    lastX = x;
+                }
+            }
+        }
 
-        // Entire Scanlines
-        // public void Draw(Display display)
-        // {
-        //     Console.SetCursorPosition(0,0);
-        //     var entireRow = string.Empty;
-        //     var row = 0;
+        /// <summary>
+        /// Full-screen in a single write. [RECOMMENDED w/ CursorVisible = false]
+        /// </summary>
+        /// <param name="display"></param>
+        private void DrawFullScreen(Display display)
+        {
+            Console.SetCursorPosition(0,0);
+            var entireScreen = string.Empty;
 
-        //     for(var i = 0; i < display.Memory.Length; i++)
-        //     {
-        //         entireRow += display.Memory[i] == 0xFF ? '█' : " ";
+            for(var i = 0; i < display.Memory.Length; i++)
+            {
+                entireScreen += display.Memory[i] == 0xFF ? '█' : " ";
 
-        //         if (entireRow.Length == display.Width)
-        //         {
-        //             Console.WriteLine(entireRow);
-        //             entireRow = string.Empty;
-        //         }
-        //     }
-        // }
+                if ((i + 1) % display.Width == 0)
+                    entireScreen += '\n';
+            }
 
-        // Entire Dirty Scanlines
+            Console.Write(entireScreen);
+        }
+
+        /// <summary>
+        /// Draws one row at a time. [RECOMMENDED w/ CursorVisible = true]
+        /// </summary>
+        private void DrawScanlines(Display display)
+        {
+            Console.SetCursorPosition(0,0);
+            var entireRow = string.Empty;
+            var row = 0;
+
+            for(var i = 0; i < display.Memory.Length; i++)
+            {
+                entireRow += display.Memory[i] == 0xFF ? '█' : " ";
+
+                if (entireRow.Length == display.Width)
+                {
+                    Console.WriteLine(entireRow);
+                    entireRow = string.Empty;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Draws only changed rows, one row at a time.
+        /// </summary>
         private string[] _previousRows = [];
         
-        public void Draw(Display display)
+        private void DrawDirtyScanlines(Display display)
         {
             if (_previousRows.Length == 0)
                 _previousRows = new string[display.Height];
@@ -171,55 +236,7 @@ namespace LandoWorks.Emulation.Chip8.Frontend
                 Console.SetCursorPosition(0, row);
                 Console.WriteLine(entireRow);
             }
-
-            // For debug output to always display on bottom, no matter how many dirty rows acutally displayed...
-            _debugConsoleRow = display.Height + 2;
         }
-
-        // Full Screen
-        // public void Draw(Display display)
-        // {
-        //     Console.SetCursorPosition(0,0);
-        //     var entireScreen = string.Empty;
-
-        //     for(var i = 0; i < display.Memory.Length; i++)
-        //     {
-        //         entireScreen += display.Memory[i] == 0xFF ? '█' : " ";
-
-        //         if ((i - 10) % display.Width == 0)
-        //             entireScreen += '\n';
-        //     }
-
-        //     Console.Write(entireScreen);
-        // }
+        #endregion
     }
 }
-
-
-// using System;
-
-// // Ensure the console supports UTF-8 characters if rendering custom symbols
-// Console.OutputEncoding = System.Text.Encoding.UTF8;
-
-// // ANSI escape sequence prefix
-// const string ESC = "\u001b[";
-// const string RESET = ESC + "0m";
-
-// // Style definitions
-// const string BOLD = ESC + "1m";
-// const string RED = ESC + "31m";
-// const string GREEN = ESC + "32m";
-// const string YELLOW = ESC + "33m";
-// const string BLUE = ESC + "34m";
-// const string WHITE = ESC + "37m";  
-// const string BG_DARK_GRAY = ESC + "100m";
-
-// // Outputting formatted text
-// Console.WriteLine($"{BOLD}{BLUE}=== ANSI Console App Demo ==={RESET}\n");
-
-// Console.WriteLine($"This is {RED}Red Text{RESET} and this is {GREEN}Green Text{RESET}.");
-// Console.WriteLine($"You can combine {BOLD}{YELLOW}Bold Yellow{RESET} easily.");
-// Console.WriteLine($"{BG_DARK_GRAY}{WHITE} This line has a dark gray background. {RESET}");
-
-// Console.WriteLine("\nPress any key to exit...");
-// Console.ReadKey();
