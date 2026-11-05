@@ -2,4 +2,5 @@
   <Project Path="Chip8.ConsoleApp/Chip8.ConsoleApp.csproj" />
   <Project Path="Chip8.Core/Chip8.Core.csproj" />
   <Project Path="Chip8.RaylibApp/Chip8.RaylibApp.csproj" />
+  <Project Path="Chip8.Shared/Chip8.Shared.csproj" />
 </Solution>

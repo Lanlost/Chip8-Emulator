@@ -22,6 +22,28 @@ namespace LandoWorks.Emulation.Chip8.Core
         const bool _FX0A_WAIT_FOR_RELEASE = true;
         #endregion
 
+        #region Private Constants / Static Readonly
+        private readonly static byte[,] DEFAULT_FONT =
+        {
+            { 0xF0, 0x90, 0x90, 0x90, 0xF0 }, // 0
+            { 0x20, 0x60, 0x20, 0x20, 0x70 }, // 1
+            { 0xF0, 0x10, 0xF0, 0x80, 0xF0 }, // 2
+            { 0xF0, 0x10, 0xF0, 0x10, 0xF0 }, // 3
+            { 0x90, 0x90, 0xF0, 0x10, 0x10 }, // 4
+            { 0xF0, 0x80, 0xF0, 0x10, 0xF0 }, // 5
+            { 0xF0, 0x80, 0xF0, 0x90, 0xF0 }, // 6
+            { 0xF0, 0x10, 0x20, 0x40, 0x40 }, // 7
+            { 0xF0, 0x90, 0xF0, 0x90, 0xF0 }, // 8
+            { 0xF0, 0x90, 0xF0, 0x10, 0xF0 }, // 9
+            { 0xF0, 0x90, 0xF0, 0x90, 0x90 }, // A
+            { 0xE0, 0x90, 0xE0, 0x90, 0xE0 }, // B
+            { 0xF0, 0x80, 0x80, 0x80, 0xF0 }, // C
+            { 0xE0, 0x90, 0x90, 0x90, 0xE0 }, // D
+            { 0xF0, 0x80, 0xF0, 0x80, 0xF0 }, // E
+            { 0xF0, 0x80, 0xF0, 0x80, 0x80 }  // F
+        };
+        #endregion
+
         #region Private Variables
         private const ushort RAM_SIZE = 0x1000; // 4096
         private const ushort ENTRY_POINT = 0x200;
@@ -46,102 +68,75 @@ namespace LandoWorks.Emulation.Chip8.Core
             { 0xC, 0x00 }, { 0xD, 0x00 }, { 0xE, 0x00 }, { 0xF, 0x00 },
         };
 
-        private readonly static byte[,] _font =
-        {
-            { 0xF0, 0x90, 0x90, 0x90, 0xF0 }, // 0
-            { 0x20, 0x60, 0x20, 0x20, 0x70 }, // 1
-            { 0xF0, 0x10, 0xF0, 0x80, 0xF0 }, // 2
-            { 0xF0, 0x10, 0xF0, 0x10, 0xF0 }, // 3
-            { 0x90, 0x90, 0xF0, 0x10, 0x10 }, // 4
-            { 0xF0, 0x80, 0xF0, 0x10, 0xF0 }, // 5
-            { 0xF0, 0x80, 0xF0, 0x90, 0xF0 }, // 6
-            { 0xF0, 0x10, 0x20, 0x40, 0x40 }, // 7
-            { 0xF0, 0x90, 0xF0, 0x90, 0xF0 }, // 8
-            { 0xF0, 0x90, 0xF0, 0x10, 0xF0 }, // 9
-            { 0xF0, 0x90, 0xF0, 0x90, 0x90 }, // A
-            { 0xE0, 0x90, 0xE0, 0x90, 0xE0 }, // B
-            { 0xF0, 0x80, 0x80, 0x80, 0xF0 }, // C
-            { 0xE0, 0x90, 0x90, 0x90, 0xE0 }, // D
-            { 0xF0, 0x80, 0xF0, 0x80, 0xF0 }, // E
-            { 0xF0, 0x80, 0xF0, 0x80, 0x80 }  // F
-        };
-
+        private byte[,] _font;
         private readonly Dictionary<byte, bool> _previousControlState = []; 
 
         private Timer _timer;
+        private Stopwatch _stopWatch;
         #endregion
         
+        #region Public Properties
         public Display Display => _display;
-        
-        public Interpreter()
-        {
-            _timer = new Timer(60);
-            _display = new Display(width: 64, height: 32);
-        }
-
-        public byte[] LoadRom(string path)
-        {
-            if (!Path.Exists(path))
-                throw new FileNotFoundException(path);
-                
-            _rom = File.ReadAllBytes(path);
-            
-            if (_rom.Length + ENTRY_POINT > RAM_SIZE) {
-                throw new Exception("Invalid rom; too large.");
-            }
-
-            return _rom;
-        }
-
-        private Stopwatch _stopWatch = new();
         public long EmuTicks { get; set; }
         public double EmuSeconds { get; set; }
         public double RealSeconds { get; set; }
         public int DelayRegister => _delayRegister;
-        
+        #endregion
+
+        #region Constructor
+        public Interpreter()
+        {
+            _display = new Display(width: 64, height: 32);
+            _font = (byte[,])DEFAULT_FONT.Clone();
+            _ram = new byte[RAM_SIZE];
+            _stopWatch = new();
+            _timer = new Timer(60);
+
+            Initialize();
+        }
+        #endregion
+
+        #region Public Methods
+        public void LoadRom(byte[] rom)
+        {
+            if (rom.Length + ENTRY_POINT > RAM_SIZE) {
+                throw new InvalidDataException("Invalid rom; too large.");
+            }
+
+            _rom = (byte[])rom.Clone();
+            _rom.CopyTo(_ram, ENTRY_POINT);
+        }
+
+        public void LoadFont(byte[,] font)
+        {
+            if (font.GetLength(0) != 16 || font.GetLength(1) != 5)
+                throw new ArgumentException("Font must be 16x5 bytes.");
+
+            _font = (byte[,])font.Clone();
+            CopyFontToRam();
+        }
+
         public void Initialize()
         {
-            InitializeRam(_rom);
+            _display.Clear();
+            Array.Clear(_ram);
             InitializeRegisters();
+            CopyFontToRam();
         }
 
         public void Start()
         {
-            Initialize();
-            
             _timer.Start();
             _stopWatch.Start();
         }
 
-        private void InitializeRam(byte[] rom)
+        public void Restart()
         {
-            _ram = new byte[RAM_SIZE];
-            _display.Clear();
-            
-            // Copy the rom into ram at the program entry point. (0x200)
-            rom.CopyTo(_ram, ENTRY_POINT);
-
-            // Copy font into ram at FONT_ADDRESS. (0x50)
-            for(var row = 0; row < _font.GetLength(0); row++)
-            {
-                var rowStartIndex = FONT_ADDRESS + row * _font.GetLength(1);
-                Debug.WriteLine($"Copying font chr to address 0x{rowStartIndex:X4}...");
-
-                for(var column = 0; column < _font.GetLength(1); column++) {
-                    _ram[rowStartIndex + column] = _font[row, column];
-                }
-            }
+            Initialize();
+            LoadRom(_rom);
+            Start();
         }
 
-        private void InitializeRegisters()
-        {
-            _indexRegister = 0x00;
-            _delayRegister = 0x00;
-            _soundRegister = 0x00;
-            _programCounter = ENTRY_POINT;
-        }
-
-        
         public void Step(Dictionary<byte, bool> currentControlState)
         {
             RealSeconds = (double)_stopWatch.ElapsedTicks / Stopwatch.Frequency;
@@ -593,6 +588,67 @@ namespace LandoWorks.Emulation.Chip8.Core
             CopyControlState(currentControlState, _previousControlState);
         }
 
+        public void ViewRam(int start, int? length = null)
+        {
+            var end = length.HasValue 
+                ? Math.Min(_ram.Length, start + length.Value)
+                : _ram.Length;
+
+            for(var i = start; i < end; i+=0x10) {
+                Console.WriteLine();
+                Console.Write($"0x{i:X4}: ");
+
+                var remaining = _ram.Length - i;
+                var rowLength = remaining >= 0x10 ? 0x10 : remaining;
+
+                for(var rowI = 0; rowI < rowLength; rowI++) {
+                    Console.Write($"{_ram[rowI + i]:X2}");
+                    Console.Write(" ");
+                }
+
+                Console.Write("| ");
+
+                for(var rowI = 0; rowI < rowLength; rowI++) {
+                    var chr = (char)_ram[rowI + i];
+
+                    if (chr == '\0')
+                    {
+                        var oldColor = Console.ForegroundColor;
+                        Console.ForegroundColor = ConsoleColor.DarkCyan;
+                        Console.Write(". ");
+                        Console.ForegroundColor = oldColor;
+                    }  else
+                    {
+                        Console.Write($"{chr} ");
+                    }
+                }
+            }
+        }
+        #endregion
+
+        #region Private Methods
+        private void InitializeRegisters()
+        {
+            _indexRegister = 0x00;
+            _delayRegister = 0x00;
+            _soundRegister = 0x00;
+            _programCounter = ENTRY_POINT;
+        }
+
+        private void CopyFontToRam()
+        {
+            // Copy font into ram at FONT_ADDRESS. (0x50)
+            for(var row = 0; row < _font.GetLength(0); row++)
+            {
+                var rowStartIndex = FONT_ADDRESS + row * _font.GetLength(1);
+                Debug.WriteLine($"Copying font chr to address 0x{rowStartIndex:X4}...");
+
+                for(var column = 0; column < _font.GetLength(1); column++) {
+                    _ram[rowStartIndex + column] = _font[row, column];
+                }
+            }
+        }
+
         // This exists just so I don't forget that an instruction is 2 bytes.
         private void  IncrementOneInstruction()
         {
@@ -631,7 +687,6 @@ namespace LandoWorks.Emulation.Chip8.Core
             }
         }
 
-
         /// <summary>
         /// Gets an individual pixel from a sprite byte.
         /// </summary>
@@ -668,8 +723,8 @@ namespace LandoWorks.Emulation.Chip8.Core
             // Sprite STARTING X & Y coodinates wrap within their row / column.
             // e.g. 64 is 0, 65 is 1, etc. (62, 63, 0, 1, 2). But the actual pixels 
             // drawn are clipped if they fall outside the range. 
-            x %= Display.Width;
-            y %= Display.Height;
+            x %= _display.Width;
+            y %= _display.Height;
 
             for(var row = 0; row < height; row++) 
             {
@@ -678,7 +733,7 @@ namespace LandoWorks.Emulation.Chip8.Core
                     if (!IsSpriteBitOn(_ram[address], column))
                         continue;
 
-                    var toggleStatus = Display.TogglePixel(x + column, y + row);
+                    var toggleStatus = _display.TogglePixel(x + column, y + row);
 
                     if (toggleStatus == Display.PixelToggleStatus.TurnedOff)
                         hadCollision = true;
@@ -697,42 +752,6 @@ namespace LandoWorks.Emulation.Chip8.Core
                 to[entry.Key] = entry.Value;
             }
         }
-
-        public void ViewRam(int start, int? length = null)
-        {
-            var end = length.HasValue 
-                ? Math.Min(_ram.Length, start + length.Value)
-                : _ram.Length;
-
-            for(var i = start; i < end; i+=0x10) {
-                Console.WriteLine();
-                Console.Write($"0x{i:X4}: ");
-
-                var remaining = _ram.Length - i;
-                var rowLength = remaining >= 0x10 ? 0x10 : remaining;
-
-                for(var rowI = 0; rowI < rowLength; rowI++) {
-                    Console.Write($"{_ram[rowI + i]:X2}");
-                    Console.Write(" ");
-                }
-
-                Console.Write("| ");
-
-                for(var rowI = 0; rowI < rowLength; rowI++) {
-                    var chr = (char)_ram[rowI + i];
-
-                    if (chr == '\0')
-                    {
-                        var oldColor = Console.ForegroundColor;
-                        Console.ForegroundColor = ConsoleColor.DarkCyan;
-                        Console.Write(". ");
-                        Console.ForegroundColor = oldColor;
-                    }  else
-                    {
-                        Console.Write($"{chr} ");
-                    }
-                }
-            }
-        }
+        #endregion
     }
 }

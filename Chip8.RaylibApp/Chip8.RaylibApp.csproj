@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Chip8.Core\Chip8.Core.csproj" />
+    <ProjectReference Include="..\Chip8.Shared\Chip8.Shared.csproj" />
   </ItemGroup>
 
   <!-- Copy roms from solution folder to build folder before running. -->
