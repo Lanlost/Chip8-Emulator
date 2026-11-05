@@ -107,14 +107,10 @@ namespace LandoWorks.Emulation.Chip8.Core
 
         public void Start()
         {
+            Initialize();
+            
             _timer.Start();
             _stopWatch.Start();
-        }
-
-        public void Restart()
-        {
-            Initialize();
-            Start();
         }
 
         private void InitializeRam(byte[] rom)

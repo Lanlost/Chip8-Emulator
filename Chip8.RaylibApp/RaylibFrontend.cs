@@ -1,10 +1,9 @@
-﻿using LandoWorks.Emulation.Chip8.Interfaces;
-using LandoWorks.Emulation.Chip8.Core;
+﻿using LandoWorks.Emulation.Chip8.Core;
 using Raylib_cs;
 
 namespace LandoWorks.Emulation.Chip8.Frontend
 {
-    public class RaylibFrontend : IFrontend, IRenderer
+    public class RaylibFrontend
     {
         private int _width;
         private int _height;
@@ -47,25 +46,50 @@ namespace LandoWorks.Emulation.Chip8.Frontend
             Raylib.SetTargetFPS(60);
         }
         
-        public void Run(Action<Dictionary<byte, bool>, IRenderer> loop)
+        #region Public Methods
+        public void Run(Interpreter interpreter)
         {
+            const int STEPS_PER_ITERATION = 10;
+            var isConsoleAttached = IsConsoleAttached();
+
+            #if DEBUG
+            {
+                // If no console is attached this will throw an exception.
+                if (isConsoleAttached)
+                    Console.Clear();
+            }
+            #endif
+
+            interpreter.Start();
+
             while(!Raylib.WindowShouldClose())
             {
                 UpdateControlState();
-                loop(_controlState, this);                
+
+                for(var i = 0; i < STEPS_PER_ITERATION; i++) {
+                    interpreter.Step(_controlState);
+                }
+
+                Draw(interpreter.Display);
+
+                #if DEBUG
+                {
+                    // If no console is attached this will throw an exception.
+                    if (isConsoleAttached)
+                        Console.SetCursorPosition(0, 0);
+
+                    // Even when no console is attached these will still
+                    // show up in VsCode's debug console, which can be useful.
+                    Console.WriteLine($"Real Seconds:  {interpreter.RealSeconds:F3}             ");
+                    Console.WriteLine($"Emu Seconds:   {interpreter.EmuSeconds:F3}             ");
+                    Console.WriteLine($"Diff Seconds:  {interpreter.RealSeconds - interpreter.EmuSeconds:F3}             ");
+                }
+                #endif
             }
 
             Raylib.CloseWindow();
         }
 
-        private void UpdateControlState()
-        {
-            foreach(var entry in _controlMap)
-            {
-                _controlState[entry.Key] = Raylib.IsKeyDown(entry.Value);
-            }
-        }
-        
         public void Draw(Display display)
         {
             Raylib.BeginDrawing();
@@ -103,5 +127,31 @@ namespace LandoWorks.Emulation.Chip8.Frontend
             Raylib.DrawPixel(x, y, new Raylib_cs.Color(color.R, color.G, color.B, color.A));
             Raylib.EndDrawing();
         }
+        #endregion
+
+        #region Private Methods
+        /// <summary>
+        /// OS independent hack to detect if a console is actually attached or not.
+        /// </summary>
+        private static bool IsConsoleAttached()
+        {
+            try
+            {
+                return Console.WindowHeight > 0;
+            }
+            catch (IOException)
+            {
+                return false;
+            }
+        }
+
+        private void UpdateControlState()
+        {
+            foreach(var entry in _controlMap)
+            {
+                _controlState[entry.Key] = Raylib.IsKeyDown(entry.Value);
+            }
+        }
+        #endregion
     }
 }

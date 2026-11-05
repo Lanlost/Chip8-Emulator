@@ -1,10 +1,8 @@
-using LandoWorks.Emulation.Chip8.Interfaces;
 using LandoWorks.Emulation.Chip8.Core;
-using LandoWorks.Emulation.Chip8.ConsoleApp;
 
-namespace LandoWorks.Emulation.Chip8.Frontend
+namespace LandoWorks.Emulation.Chip8.ConsoleApp
 {
-    public class ConsoleFrontend : IFrontend, IRenderer
+    public class ConsoleFrontend
     {
         //     // 1 2 3 C      1 2 3 4
         //     // 4 5 6 D  ->  q w e r
@@ -39,10 +37,21 @@ namespace LandoWorks.Emulation.Chip8.Frontend
         public bool CursorVisible { set => Console.CursorVisible = value; }
 
         #region Public Methods
-        public void Run(Action<Dictionary<byte, bool>, IRenderer> Loop)
+        public void Run(Interpreter interpreter)
         {
-            Console.Clear();
+            const int STEPS_PER_ITERATION = 10;
+            var isConsoleAttached = IsConsoleAttached();
             
+            #if DEBUG
+            {
+                // If no console is attached this will throw an exception.
+                if (isConsoleAttached)
+                    Console.Clear();
+            }
+            #endif
+
+            interpreter.Start();
+
             while(true) 
             {
                 ConsoleKeyInfo? key = null;
@@ -56,7 +65,26 @@ namespace LandoWorks.Emulation.Chip8.Frontend
                 }
 
                 UpdateControlState(key);
-                Loop(_controlState, this);
+                
+                for(var i = 0; i < STEPS_PER_ITERATION; i++) {
+                    interpreter.Step(_controlState);
+                }
+
+                Draw(interpreter.Display);
+
+                #if DEBUG
+                {
+                    // If no console is attached this will throw an exception.
+                    if (isConsoleAttached)
+                        Console.SetCursorPosition(0, interpreter.Display.Height + 2);
+
+                    // Even when no console is attached these will still
+                    // show up in VsCode's debug console, which can be useful.
+                    Console.WriteLine($"Real Seconds:  {interpreter.RealSeconds:F3}             ");
+                    Console.WriteLine($"Emu Seconds:   {interpreter.EmuSeconds:F3}             ");
+                    Console.WriteLine($"Diff Seconds:  {interpreter.RealSeconds - interpreter.EmuSeconds:F3}             ");
+                }
+                #endif
             }
         }
 
@@ -88,6 +116,21 @@ namespace LandoWorks.Emulation.Chip8.Frontend
         #endregion
 
         #region Private Methods
+        /// <summary>
+        /// OS independent hack to detect if a console is actually attached or not.
+        /// </summary>
+        private static bool IsConsoleAttached()
+        {
+            try
+            {
+                return Console.WindowHeight > 0;
+            }
+            catch (IOException)
+            {
+                return false;
+            }
+        }
+
         private void UpdateControlState(ConsoleKeyInfo? key)
         {
             foreach(var entry in _controlMap)
