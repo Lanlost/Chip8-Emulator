@@ -44,7 +44,7 @@ namespace LandoWorks.Emulation.Chip8.Frontend
             _width = width;
             _height = height;
 
-            Raylib.InitWindow(_width, _height, "Chip 8 Interpreter");
+            Raylib.InitWindow(_width, _height, "Chip 8 Emulator");
             Raylib.SetTargetFPS(60);
         }
         
