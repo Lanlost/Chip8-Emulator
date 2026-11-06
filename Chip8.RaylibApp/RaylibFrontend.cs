@@ -1,4 +1,5 @@
 ﻿using LandoWorks.Emulation.Chip8.Core;
+using LandoWorks.Emulation.Chip8.RaylibApp;
 using Raylib_cs;
 
 namespace LandoWorks.Emulation.Chip8.Frontend
@@ -36,6 +37,7 @@ namespace LandoWorks.Emulation.Chip8.Frontend
         };
 
         private Dictionary<byte, bool> _controlState = new();
+        private TonePlayer _tonePlayer = new TonePlayer();
 
         public RaylibFrontend(int width, int height)
         {
@@ -49,7 +51,7 @@ namespace LandoWorks.Emulation.Chip8.Frontend
         #region Public Methods
         public void Run(Interpreter interpreter)
         {
-            const int STEPS_PER_ITERATION = 10;
+            const int STEPS_PER_ITERATION = 20;
             var isConsoleAttached = IsConsoleAttached();
 
             #if DEBUG
@@ -60,10 +62,19 @@ namespace LandoWorks.Emulation.Chip8.Frontend
             }
             #endif
 
+            interpreter.OnSoundChanged = (playing) =>
+            {
+                if (playing) 
+                    _tonePlayer.Play();
+                else
+                    _tonePlayer.Stop();
+            };
+
             interpreter.Start();
 
             while(!Raylib.WindowShouldClose())
             {
+                _tonePlayer.Update();
                 UpdateControlState();
 
                 for(var i = 0; i < STEPS_PER_ITERATION; i++) {
@@ -71,7 +82,7 @@ namespace LandoWorks.Emulation.Chip8.Frontend
                 }
 
                 Draw(interpreter.Display);
-
+                
                 #if DEBUG
                 {
                     // If no console is attached this will throw an exception.

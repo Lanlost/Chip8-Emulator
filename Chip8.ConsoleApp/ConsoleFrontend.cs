@@ -52,6 +52,12 @@ namespace LandoWorks.Emulation.Chip8.ConsoleApp
 
             interpreter.Start();
 
+            interpreter.OnSoundChanged += (played) =>
+            {
+                if (played)
+                    Console.Beep();
+            };
+
             while(true) 
             {
                 ConsoleKeyInfo? key = null;

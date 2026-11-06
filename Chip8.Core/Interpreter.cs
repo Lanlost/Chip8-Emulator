@@ -4,6 +4,31 @@ using System.Text;
 
 namespace LandoWorks.Emulation.Chip8.Core
 {
+    // DANM8KU:
+    //    _FX1E_OVERFLOW_VF = true;
+    //    _BNNN_OFFSET_BUG = false;
+    //    _FX55_FX65_INCREMENT_I = true;
+    //    _8XY6_8XYE_SHIFT_VY = true;
+    //    _FX0A_WAIT_FOR_RELEASE = true;
+    //    _9XYN_SPRITE_PIXELS_WRAP = true;
+    
+    // Cave Explorer
+    //    _FX1E_OVERFLOW_VF = true;
+    //    _BNNN_OFFSET_BUG = false;
+    //    _FX55_FX65_INCREMENT_I = false;
+    //    _8XY6_8XYE_SHIFT_VY = true;
+    //    _FX0A_WAIT_FOR_RELEASE = true;
+    //    _9XYN_SPRITE_PIXELS_WRAP = false;
+
+
+    // Ghost Glitch
+    //    _FX1E_OVERFLOW_VF = true;
+    //    _BNNN_OFFSET_BUG = false;
+    //    _FX55_FX65_INCREMENT_I = false;
+    //    _8XY6_8XYE_SHIFT_VY = true;
+    //    _FX0A_WAIT_FOR_RELEASE = true;
+    //    _9XYN_SPRITE_PIXELS_WRAP = false;
+    
     public class Interpreter
     {
         #region Support Config
@@ -20,6 +45,10 @@ namespace LandoWorks.Emulation.Chip8.Core
 
         // True for COSMAC VIP. When blocking & waiting for a key, the original COSMAP would wait for key release. 
         const bool _FX0A_WAIT_FOR_RELEASE = true;
+
+        // True for at least DANM8KU. The SPEC says that sprite starting X,Y coordinates wrap but the individual
+        // pixels do not. Danm8ku produces garbage if you follow said spec however so I've added this flag.  
+        const bool _9XYN_SPRITE_PIXELS_WRAP = false;
         #endregion
 
         #region Private Constants / Static Readonly
@@ -81,6 +110,7 @@ namespace LandoWorks.Emulation.Chip8.Core
         public double EmuSeconds { get; set; }
         public double RealSeconds { get; set; }
         public int DelayRegister => _delayRegister;
+        public Action<bool>? OnSoundChanged { get; set; }
         #endregion
 
         #region Constructor
@@ -157,6 +187,8 @@ namespace LandoWorks.Emulation.Chip8.Core
                 _delayRegister = (byte)Math.Max(0, _delayRegister - ticksPassed);
                 _soundRegister = (byte)Math.Max(0, _soundRegister - ticksPassed);
             }
+
+            OnSoundChanged?.Invoke(_soundRegister > 0);
 
             // Fetch
             byte highByte = _ram[_programCounter];
@@ -541,14 +573,16 @@ namespace LandoWorks.Emulation.Chip8.Core
                     //
                     else if (NN == 0x55)
                     {
+                        // Original CHIP-8 increments I after each write; modern implementations don't.
+                        // This loop supports both behaviors, essentially equivalent to:
+                        //     _ram[_indexRegister++] = _registers[i];  // Original
+                        //     _ram[_indexRegister + i] = _registers[i]; // Modern
                         var originalIndex = _indexRegister;
 
                         for(byte i = 0; i <= X; i++)
                         {
-                            // Modern implementations use an index and don't modify the index register.
                             _ram[originalIndex + i] = _registers[i];
 
-                            // Original implementations do, however. This allows either approach via flag.
                             if (_FX55_FX65_INCREMENT_I) {
                                 _indexRegister++;
                             }
@@ -557,16 +591,23 @@ namespace LandoWorks.Emulation.Chip8.Core
                         handled = true;
                     }
 
+                    // FX65: Load V0 -> VX from successive memory locations starting at I.
+                    //       For FX65, each variable register from V0 to VX inclusive
+                    //       (if X is 0, then only V0) will be loaded from successive memory addresses,
+                    //       starting with the one stored in I. V0 will be loaded from the address
+                    //       in I, V1 from I + 1, and so on, until VX is loaded from I + X.
                     else if (NN == 0x65)
                     {
+                        // Original CHIP-8 increments I after each write; modern implementations don't.
+                        // This loop supports both behaviors, essentially equivalent to:
+                        //     _ram[_indexRegister++] = _registers[i];  // Original
+                        //     _ram[_indexRegister + i] = _registers[i]; // Modern
                         var originalIndex = _indexRegister;
 
                         for(byte i = 0; i <= X; i++)
                         {
-                            // Modern implementations use an index and don't modify the index register.
                             _registers[i] = _ram[originalIndex + i];
 
-                            // Original implementations do, however. This allows either approach via flag.
                             if (_FX55_FX65_INCREMENT_I) {
                                 _indexRegister++;
                             }
@@ -733,7 +774,17 @@ namespace LandoWorks.Emulation.Chip8.Core
                     if (!IsSpriteBitOn(_ram[address], column))
                         continue;
 
-                    var toggleStatus = _display.TogglePixel(x + column, y + row);
+                    var pixelX = x + column;
+                    var pixelY = y + row;
+
+                    // Certain games like danm8ku break spec and acutally wrap pixels incorrectly.
+                    if (_9XYN_SPRITE_PIXELS_WRAP)
+                    {
+                        pixelX %= _display.Width;
+                        pixelY %= _display.Height;
+                    }
+
+                    var toggleStatus = _display.TogglePixel(pixelX, pixelY);
 
                     if (toggleStatus == Display.PixelToggleStatus.TurnedOff)
                         hadCollision = true;
